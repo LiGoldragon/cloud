@@ -7,12 +7,12 @@ use cloud::daemon::Daemon;
 use cloud::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
 use nota_codec::NotaEncode;
 use owner_signal_cloud::{
-    CapabilityDirective, CapabilityPolicy, CredentialHandle, Operation as OwnerOperation, Policy,
-    Registration, Reply as OwnerReply, ZonePolicy,
+    CapabilityDirective, CapabilityPolicy, CredentialHandle, Operation as OwnerOperation,
+    PlanPreparation, Policy, Registration, Reply as OwnerReply, ZonePolicy,
 };
 use signal_cloud::{
-    Capability, CapabilityState, DomainName, Observation, Operation as CloudOperation, PlanRequest,
-    Provider, ProviderAccount, Reply as CloudReply,
+    Capability, CapabilityState, DomainName, Observation, Operation as CloudOperation, Provider,
+    ProviderAccount, Reply as CloudReply,
 };
 use signal_frame::{
     CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
@@ -43,6 +43,10 @@ fn command_line_dispatch_routes_working_and_owner_heads() {
     );
     assert_eq!(
         dispatch.route_head("RegisterAccount").expect("owner head"),
+        CommandLineSocket::Owner
+    );
+    assert_eq!(
+        dispatch.route_head("PreparePlan").expect("owner head"),
         CommandLineSocket::Owner
     );
 }
@@ -166,7 +170,7 @@ fn owner_policy_enables_planning_but_apply_requires_provider_authority() {
         FrameReply::Accepted { .. }
     ));
 
-    let plan_request = CloudOperation::Plan(PlanRequest {
+    let plan_request = OwnerOperation::PreparePlan(PlanPreparation {
         desired_state: signal_cloud::DesiredState {
             provider: Provider::Cloudflare,
             zone: DomainName::new("goldragon.criome"),
@@ -175,9 +179,9 @@ fn owner_policy_enables_planning_but_apply_requires_provider_authority() {
         },
     })
     .into_request();
-    let plan = match store.handle_ordinary_request(plan_request) {
+    let plan = match store.handle_owner_request(plan_request) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(CloudReply::PlanPrepared(plan)) => plan,
+            SubReply::Ok(OwnerReply::PlanPrepared(plan)) => plan,
             other => panic!("unexpected plan reply {other:?}"),
         },
         other => panic!("unexpected plan frame reply {other:?}"),

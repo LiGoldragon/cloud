@@ -22,9 +22,9 @@ path = "src/bin/cloud.rs"
 [dependencies]
 nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
 nota-config       = { git = "https://github.com/LiGoldragon/nota-config.git", branch = "main" }
-owner-signal-cloud = { git = "https://github.com/LiGoldragon/owner-signal-cloud.git", branch = "main" }
+owner-signal-cloud = { git = "https://github.com/LiGoldragon/owner-signal-cloud.git", branch = "cloud-domain-criome-runtime" }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
-signal-cloud      = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
+signal-cloud      = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "cloud-domain-criome-runtime" }
 signal-frame      = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
 thiserror         = "2"
 

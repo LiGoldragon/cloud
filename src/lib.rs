@@ -9,16 +9,15 @@ use std::sync::Mutex;
 use nota_codec::NotaRecord;
 use owner_signal_cloud::{
     AccountRegistered, AccountRetired, Application, Approval, CredentialRotated,
-    Operation as OwnerOperation, PlanApproved, PolicySet, Registration, Reply as OwnerReply,
-    RequestRejected as OwnerRequestRejected, Retirement, Rotation,
+    Operation as OwnerOperation, PlanApproved, PlanPreparation, PolicySet, Registration,
+    Reply as OwnerReply, RequestRejected as OwnerRequestRejected, Retirement, Rotation,
 };
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use signal_cloud::{
     Capability, CapabilityObservation, CapabilityQuery, CapabilityReport, CapabilityState,
     DesiredState, Observation, ObservationResult, Operation as CloudOperation, Plan,
-    PlanIdentifier, PlanQuery, PlanRequest, Provider, RecordListing, RedirectListing,
-    Reply as CloudReply, RequestRejected, RequestUnsupported, UnsupportedReason, ValidationReport,
-    Zone, ZoneListing,
+    PlanIdentifier, PlanQuery, Provider, RecordListing, RedirectListing, Reply as CloudReply,
+    RequestRejected, RequestUnsupported, UnsupportedReason, ValidationReport, Zone, ZoneListing,
 };
 use signal_frame::{NonEmpty, Reply as FrameReply, SubReply};
 
@@ -153,7 +152,6 @@ impl Store {
         match operation {
             CloudOperation::Observe(observation) => self.observe(observation),
             CloudOperation::Validate(validation) => self.validate(validation.desired_state),
-            CloudOperation::Plan(request) => self.plan(request),
         }
     }
 
@@ -276,19 +274,17 @@ impl Store {
         CloudReply::Validated(ValidationReport { findings: vec![] })
     }
 
-    fn plan(&self, request: PlanRequest) -> CloudReply {
+    fn prepare_plan(&self, preparation: PlanPreparation) -> OwnerReply {
         let DesiredState {
             provider,
             zone,
             records,
             redirects,
-        } = request.desired_state;
+        } = preparation.desired_state;
         if !self.provider_is_configured(provider) {
-            return CloudReply::RequestUnsupported(RequestUnsupported {
-                operation: signal_cloud::OperationKind::Plan,
-                provider: Some(provider),
-                capability: None,
-                reason: UnsupportedReason::ProviderNotConfigured,
+            return OwnerReply::RequestRejected(OwnerRequestRejected {
+                operation: owner_signal_cloud::OperationKind::PreparePlan,
+                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         }
         let plan = Plan {
@@ -303,7 +299,7 @@ impl Store {
             redirect_sources_to_delete: vec![],
         };
         self.plans.lock().expect("plans mutex").push(plan.clone());
-        CloudReply::PlanPrepared(plan)
+        OwnerReply::PlanPrepared(plan)
     }
 
     fn observe_plan(&self, query: PlanQuery) -> CloudReply {
@@ -326,6 +322,7 @@ impl Store {
             OwnerOperation::RegisterAccount(registration) => self.register_account(registration),
             OwnerOperation::RotateCredential(rotation) => self.rotate_credential(rotation),
             OwnerOperation::SetPolicy(policy) => self.set_policy(policy),
+            OwnerOperation::PreparePlan(preparation) => self.prepare_plan(preparation),
             OwnerOperation::ApprovePlan(approval) => self.approve_plan(approval),
             OwnerOperation::ApplyPlan(application) => self.apply_plan(application),
             OwnerOperation::RetireAccount(retirement) => self.retire_account(retirement),

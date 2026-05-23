@@ -286,7 +286,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 [[package]]
 name = "owner-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/owner-signal-cloud.git?branch=main#08f9fa3616ff85e279753bed7b8843daac1a2b6b"
+source = "git+https://github.com/LiGoldragon/owner-signal-cloud.git?branch=cloud-domain-criome-runtime#591ba519b36b68448a0240efd1177b4437f7be5f"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -478,7 +478,7 @@ dependencies = [
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#29c392bb2d896ec8a04017a0b25f1f7b06e2e2cb"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=cloud-domain-criome-runtime#5b3d0f5724f86892a1011701ad6eb199c308e7d3"
 dependencies = [
  "nota-codec",
  "rkyv",

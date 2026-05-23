@@ -19,7 +19,7 @@ exactly one Signal peer: `cloud-daemon`.
 
 - observe provider accounts, zones, records, redirects, and capabilities;
 - validate desired provider-neutral state;
-- prepare provider-specific plans;
+- prepare provider-specific plans through owner authority;
 - apply owner-approved plans;
 - track provider rate limits, remote operation identifiers, and failures.
 
@@ -47,7 +47,7 @@ store. Slow provider work belongs behind provider actors with timeouts.
 3. Return typed unsupported/configuration replies when no provider account is
    configured.
 4. Store account policy and prepared plans through a runtime store abstraction.
-5. Generate local plans from `signal-cloud::DesiredState`.
+5. Generate local plans from `owner-signal-cloud::PlanPreparation`.
 6. Require owner approval before apply.
 7. Reject approved apply with `CapabilityUnauthorized` until a real provider
    actor owns live mutation.
