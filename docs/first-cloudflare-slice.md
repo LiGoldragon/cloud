@@ -13,3 +13,8 @@ The first provider slice should be read-first:
 Do not implement Page Rules as a first-class mutation surface. They are legacy
 import/read-only material unless the owner explicitly asks for a migration or
 deletion operation.
+
+The runtime already provides the daemon sockets, thin CLI, policy loading, plan
+generation, approval gate, and typed apply rejection. The next Cloudflare slice
+must replace the current policy-derived/empty observations with a real
+read-only provider actor before any mutation is added.

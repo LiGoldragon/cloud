@@ -40,16 +40,25 @@ The first daemon should use one actor per concern:
 Provider calls must not block the ordinary listener, owner listener, or plan
 store. Slow provider work belongs behind provider actors with timeouts.
 
-## First Implementation Slice
+## Current Implementation Slice
 
 1. Bind ordinary and owner Unix sockets.
 2. Decode `signal-cloud` and `owner-signal-cloud` frames.
 3. Return typed unsupported/configuration replies when no provider account is
    configured.
-4. Store provider policy and plan records in sema-engine.
-5. Add a Cloudflare read-only actor for zones and records.
-6. Add Cloudflare plan generation.
-7. Add owner-approved Cloudflare apply.
+4. Store account policy and prepared plans through a runtime store abstraction.
+5. Generate local plans from `signal-cloud::DesiredState`.
+6. Require owner approval before apply.
+7. Reject approved apply with `CapabilityUnauthorized` until a real provider
+   actor owns live mutation.
+
+`sema-engine` persistence is intentionally deferred because the current engine
+still pulls the deprecated `signal-core` dependency. The store boundary is kept
+small so persistence can be swapped in after that dependency is removed.
+
+The Cloudflare read-only actor remains the next implementation slice. Until it
+exists, zones come from owner policy and record/redirect observations return
+empty listings only after a provider account is configured.
 
 ## Hard Constraints
 
