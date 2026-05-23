@@ -1,8 +1,12 @@
 use std::os::unix::net::UnixStream;
+#[cfg(feature = "cloudflare")]
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use cloud::Store;
 use cloud::client::{CliRequest, CommandLineDispatch};
+#[cfg(feature = "cloudflare")]
+use cloud::cloudflare::{Api as CloudflareApi, ApiRecord, ApiZone, CredentialSource, Token};
 use cloud::daemon::Daemon;
 use cloud::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
 use nota_codec::NotaEncode;
@@ -17,6 +21,10 @@ use signal_cloud::{
     Capability, CapabilityReport, CapabilityState, DomainName, Observation,
     Operation as CloudOperation, Provider, ProviderAccount, Reply as CloudReply,
     RequestUnsupported, UnsupportedReason,
+};
+#[cfg(feature = "cloudflare")]
+use signal_cloud::{
+    DomainNameSystemRecord, ProxyMode, RecordKind, RecordListing, RecordValue, ZoneIdentifier,
 };
 use signal_frame::{
     CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
@@ -35,6 +43,144 @@ fn exchange() -> ExchangeIdentifier {
         ExchangeLane::Connector,
         LaneSequence::first(),
     )
+}
+
+#[cfg(feature = "cloudflare")]
+#[derive(Debug)]
+struct FixtureCredentialSource {
+    token: Option<Token>,
+}
+
+#[cfg(feature = "cloudflare")]
+impl FixtureCredentialSource {
+    fn available() -> Self {
+        Self {
+            token: Some(Token::new("fixture-token")),
+        }
+    }
+
+    fn missing() -> Self {
+        Self { token: None }
+    }
+}
+
+#[cfg(feature = "cloudflare")]
+impl CredentialSource for FixtureCredentialSource {
+    fn token(&self, handle: &CredentialHandle) -> cloud::cloudflare::Result<Token> {
+        self.token.clone().ok_or_else(|| {
+            cloud::cloudflare::Error::CredentialUnavailable(handle.as_str().to_owned())
+        })
+    }
+}
+
+#[cfg(feature = "cloudflare")]
+#[derive(Debug)]
+struct FixtureCloudflareApi {
+    zones: Vec<ApiZone>,
+    records: Vec<ApiRecord>,
+    queried_zones: Mutex<Vec<Option<String>>>,
+    queried_record_zones: Mutex<Vec<String>>,
+}
+
+#[cfg(feature = "cloudflare")]
+impl FixtureCloudflareApi {
+    fn new() -> Self {
+        Self {
+            zones: vec![ApiZone {
+                identifier: ZoneIdentifier::new("zone-one"),
+                name: DomainName::new("goldragon.criome"),
+            }],
+            records: vec![ApiRecord {
+                name: DomainName::new("goldragon.criome"),
+                kind: RecordKind::AddressV4,
+                value: RecordValue::new("203.0.113.7"),
+                proxy_mode: ProxyMode::ProviderProxy,
+            }],
+            queried_zones: Mutex::new(Vec::new()),
+            queried_record_zones: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn queried_record_zones(&self) -> Vec<String> {
+        self.queried_record_zones
+            .lock()
+            .expect("queried record zones")
+            .clone()
+    }
+}
+
+#[cfg(feature = "cloudflare")]
+impl CloudflareApi for FixtureCloudflareApi {
+    fn zones(
+        &self,
+        _token: &Token,
+        name: Option<&DomainName>,
+    ) -> cloud::cloudflare::Result<Vec<ApiZone>> {
+        self.queried_zones
+            .lock()
+            .expect("queried zones")
+            .push(name.map(|name| name.as_str().to_owned()));
+        Ok(self
+            .zones
+            .iter()
+            .filter(|zone| name.is_none_or(|name| zone.name == *name))
+            .cloned()
+            .collect())
+    }
+
+    fn records(
+        &self,
+        _token: &Token,
+        zone: &ZoneIdentifier,
+    ) -> cloud::cloudflare::Result<Vec<ApiRecord>> {
+        self.queried_record_zones
+            .lock()
+            .expect("queried record zones")
+            .push(zone.as_str().to_owned());
+        Ok(self.records.clone())
+    }
+}
+
+#[cfg(feature = "cloudflare")]
+fn cloudflare_fixture_store(
+    credentials: FixtureCredentialSource,
+) -> (Store, Arc<FixtureCloudflareApi>) {
+    let api = Arc::new(FixtureCloudflareApi::new());
+    let cloudflare = cloud::cloudflare::ProviderClient::new(api.clone(), Arc::new(credentials));
+    (Store::with_cloudflare_provider(cloudflare), api)
+}
+
+#[cfg(feature = "cloudflare")]
+fn configure_cloudflare_account(store: &Store, credential: &str) {
+    let registration = OwnerOperation::RegisterAccount(Registration {
+        provider: Provider::Cloudflare,
+        account: ProviderAccount::new("primary"),
+        credential: CredentialHandle::new(credential),
+    })
+    .into_request();
+    assert!(matches!(
+        store.handle_owner_request(registration),
+        FrameReply::Accepted { .. }
+    ));
+
+    let policy = OwnerOperation::SetPolicy(Policy {
+        zones: vec![ZonePolicy {
+            provider: Provider::Cloudflare,
+            account: ProviderAccount::new("primary"),
+            allowed_zones: vec![DomainName::new("goldragon.criome")],
+        }],
+        capabilities: vec![CapabilityPolicy {
+            provider: Provider::Cloudflare,
+            account: ProviderAccount::new("primary"),
+            capability: Capability::DomainNameSystemRecords,
+            directive: CapabilityDirective::Enable,
+        }],
+    })
+    .into_request();
+    assert!(matches!(
+        store.handle_owner_request(policy),
+        FrameReply::Accepted { .. }
+    ));
 }
 
 fn capability_report_over_socket(
@@ -201,6 +347,82 @@ fn not_built_provider_dispatch_is_never_configured() {
         },
         other => panic!("unexpected frame reply {other:?}"),
     }
+}
+
+#[test]
+#[cfg(feature = "cloudflare")]
+fn cloudflare_record_observation_uses_provider_actor_and_caches_last_known_state() {
+    let (store, api) = cloudflare_fixture_store(FixtureCredentialSource::available());
+    configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
+
+    let request = CloudOperation::Observe(Observation::Records(signal_cloud::RecordQuery {
+        provider: Provider::Cloudflare,
+        zone: DomainName::new("goldragon.criome"),
+    }))
+    .into_request();
+
+    let listing = match store.handle_ordinary_request(request) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(CloudReply::Observed(signal_cloud::ObservationResult::Records(
+                listing,
+            ))) => listing,
+            other => panic!("unexpected observe reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
+    };
+
+    let expected = RecordListing {
+        records: vec![DomainNameSystemRecord {
+            name: DomainName::new("goldragon.criome"),
+            kind: RecordKind::AddressV4,
+            value: RecordValue::new("203.0.113.7"),
+            proxy_mode: ProxyMode::ProviderProxy,
+        }],
+    };
+    assert_eq!(listing, expected);
+    assert_eq!(api.queried_record_zones(), vec!["zone-one".to_owned()]);
+    assert_eq!(
+        store
+            .last_known_records(Provider::Cloudflare, &DomainName::new("goldragon.criome"))
+            .expect("last known records"),
+        expected
+    );
+}
+
+#[test]
+#[cfg(feature = "cloudflare")]
+fn cloudflare_record_observation_requires_credential_environment() {
+    let (store, api) = cloudflare_fixture_store(FixtureCredentialSource::missing());
+    configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
+
+    let request = CloudOperation::Observe(Observation::Records(signal_cloud::RecordQuery {
+        provider: Provider::Cloudflare,
+        zone: DomainName::new("goldragon.criome"),
+    }))
+    .into_request();
+
+    match store.handle_ordinary_request(request) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(CloudReply::RequestUnsupported(RequestUnsupported {
+                provider,
+                capability,
+                reason,
+            })) => {
+                assert_eq!(provider, Some(Provider::Cloudflare));
+                assert_eq!(capability, Some(Capability::DomainNameSystemRecords));
+                assert_eq!(reason, UnsupportedReason::ProviderNotConfigured);
+            }
+            other => panic!("unexpected observe reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
+    }
+
+    assert!(api.queried_record_zones().is_empty());
+    assert!(
+        store
+            .last_known_records(Provider::Cloudflare, &DomainName::new("goldragon.criome"))
+            .is_none()
+    );
 }
 
 #[test]

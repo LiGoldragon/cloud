@@ -21,18 +21,20 @@ path = "src/bin/cloud.rs"
 
 [features]
 default = ["cloudflare"]
-cloudflare = []
+cloudflare = ["dep:serde", "dep:ureq"]
 google-cloud = []
 hetzner = []
 
 [dependencies]
 nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
 nota-config       = { git = "https://github.com/LiGoldragon/nota-config.git", branch = "main" }
-owner-signal-cloud = { git = "https://github.com/LiGoldragon/owner-signal-cloud.git", branch = "cloud-domain-criome-runtime" }
+owner-signal-cloud = { git = "https://github.com/LiGoldragon/owner-signal-cloud.git", branch = "main" }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
-signal-cloud      = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "cloud-domain-criome-runtime" }
+signal-cloud      = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
 signal-frame      = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
+serde             = { version = "1", features = ["derive"], optional = true }
 thiserror         = "2"
+ureq              = { version = "2", features = ["json"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

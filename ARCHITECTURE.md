@@ -46,19 +46,23 @@ store. Slow provider work belongs behind provider actors with timeouts.
 2. Decode `signal-cloud` and `owner-signal-cloud` frames.
 3. Return typed unsupported/configuration replies when no provider account is
    configured.
-4. Store account policy and prepared plans through a runtime store abstraction.
+4. Store account policy, prepared plans, and lossy last-known provider reads
+   through a runtime store abstraction.
 5. Generate local plans from `owner-signal-cloud::PlanPreparation`.
 6. Require owner approval before apply.
-7. Reject approved apply with `CapabilityUnauthorized` until a real provider
+7. Resolve Cloudflare credential handles through environment variables and list
+   Cloudflare zones and DNS records through the daemon-owned provider client.
+8. Reject approved apply with `CapabilityUnauthorized` until a real provider
    actor owns live mutation.
 
 `sema-engine` persistence is intentionally deferred because the current engine
 still pulls the deprecated `signal-core` dependency. The store boundary is kept
 small so persistence can be swapped in after that dependency is removed.
 
-The Cloudflare read-only actor remains the next implementation slice. Until it
-exists, zones come from owner policy and record/redirect observations return
-empty listings only after a provider account is configured.
+Cloudflare record observation is production-shaped but intentionally read-only:
+it uses the ordinary Signal socket, reads only owner-registered accounts and
+zones, calls the Cloudflare API from the daemon, and caches the last known
+record listing. Redirect observation and live mutation are future slices.
 
 ## Hard Constraints
 
@@ -70,7 +74,9 @@ empty listings only after a provider account is configured.
 
 ## Pending schema-engine upgrade
 
-**Status:** scheduled for migration to schema-language-based contract per `reports/designer/326-v13-spirit-complete-schema-vision.md` + `reports/designer/324-migration-mvp-spirit-handover-re-specification.md`.
+**Status:** deferred for this production slice. Current cloud work stays on the
+hand-written Rust + `signal_channel!` contract path until the schema engine is
+ready to absorb the component without delaying Cloudflare DNS management.
 
 **Target:** this component's hand-written `signal_channel!` invocation + Layer 2 Command/Effect + storage types convert to a single `cloud/cloud.schema` file. The brilliant macro library (`primary-ezqx.1`) reads the schema + emits all the wire types + ShortHeader projection + dispatcher + VersionProjection + storage descriptors.
 

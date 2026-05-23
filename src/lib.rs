@@ -15,13 +15,16 @@ use owner_signal_cloud::{
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use signal_cloud::{
     Capability, CapabilityObservation, CapabilityQuery, CapabilityReport, CapabilityState,
-    DesiredState, Observation, ObservationResult, Operation as CloudOperation, Plan,
-    PlanIdentifier, PlanQuery, Provider, RecordListing, RedirectListing, Reply as CloudReply,
-    RequestRejected, RequestUnsupported, UnsupportedReason, ValidationReport, Zone, ZoneListing,
+    DesiredState, DomainName, Observation, ObservationResult, Operation as CloudOperation, Plan,
+    PlanIdentifier, PlanQuery, Provider, RecordListing, RecordQuery, RedirectListing,
+    Reply as CloudReply, RequestRejected, RequestUnsupported, UnsupportedReason, ValidationReport,
+    Zone, ZoneListing, ZoneQuery,
 };
 use signal_frame::{NonEmpty, Reply as FrameReply, SubReply};
 
 pub mod client;
+#[cfg(feature = "cloudflare")]
+pub mod cloudflare;
 pub mod daemon;
 pub mod frame_io;
 
@@ -68,6 +71,10 @@ pub enum Error {
 
     #[error("cloud store mutex was poisoned")]
     StorePoisoned,
+
+    #[cfg(feature = "cloudflare")]
+    #[error("Cloudflare provider error: {0}")]
+    Cloudflare(#[from] cloudflare::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -90,9 +97,16 @@ nota_config::impl_rkyv_configuration!(DaemonConfiguration);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountBinding {
+    pub(crate) provider: Provider,
+    pub(crate) account: owner_signal_cloud::ProviderAccount,
+    pub(crate) credential: owner_signal_cloud::CredentialHandle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CachedRecordListing {
     provider: Provider,
-    account: owner_signal_cloud::ProviderAccount,
-    credential: owner_signal_cloud::CredentialHandle,
+    zone: DomainName,
+    listing: RecordListing,
 }
 
 #[derive(Debug)]
@@ -101,18 +115,65 @@ pub struct Store {
     policy: Mutex<owner_signal_cloud::Policy>,
     plans: Mutex<Vec<Plan>>,
     approved_plans: Mutex<Vec<PlanIdentifier>>,
+    last_known_zones: Mutex<Vec<Zone>>,
+    last_known_records: Mutex<Vec<CachedRecordListing>>,
+    #[cfg(feature = "cloudflare")]
+    cloudflare: cloudflare::ProviderClient,
 }
 
 impl Store {
     pub fn new() -> Self {
-        Self {
-            accounts: Mutex::new(Vec::new()),
-            policy: Mutex::new(owner_signal_cloud::Policy {
+        #[cfg(feature = "cloudflare")]
+        let cloudflare = cloudflare::ProviderClient::production();
+        Self::with_parts(
+            Vec::new(),
+            owner_signal_cloud::Policy {
                 zones: Vec::new(),
                 capabilities: Vec::new(),
-            }),
+            },
+            #[cfg(feature = "cloudflare")]
+            cloudflare,
+        )
+    }
+
+    #[cfg(feature = "cloudflare")]
+    pub fn with_cloudflare_provider(cloudflare: cloudflare::ProviderClient) -> Self {
+        Self::with_parts(
+            Vec::new(),
+            owner_signal_cloud::Policy {
+                zones: Vec::new(),
+                capabilities: Vec::new(),
+            },
+            cloudflare,
+        )
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn with_parts(
+        accounts: Vec<AccountBinding>,
+        policy: owner_signal_cloud::Policy,
+        cloudflare: cloudflare::ProviderClient,
+    ) -> Self {
+        Self {
+            accounts: Mutex::new(accounts),
+            policy: Mutex::new(policy),
             plans: Mutex::new(Vec::new()),
             approved_plans: Mutex::new(Vec::new()),
+            last_known_zones: Mutex::new(Vec::new()),
+            last_known_records: Mutex::new(Vec::new()),
+            cloudflare,
+        }
+    }
+
+    #[cfg(not(feature = "cloudflare"))]
+    fn with_parts(accounts: Vec<AccountBinding>, policy: owner_signal_cloud::Policy) -> Self {
+        Self {
+            accounts: Mutex::new(accounts),
+            policy: Mutex::new(policy),
+            plans: Mutex::new(Vec::new()),
+            approved_plans: Mutex::new(Vec::new()),
+            last_known_zones: Mutex::new(Vec::new()),
+            last_known_records: Mutex::new(Vec::new()),
         }
     }
 
@@ -160,68 +221,16 @@ impl Store {
             Observation::Capabilities(query) => {
                 CloudReply::Observed(ObservationResult::Capabilities(self.capabilities(query)))
             }
-            Observation::Zones(query) => {
-                if let Some(provider) = query.provider {
-                    if let Some(reply) = self.unsupported_provider_reply(
-                        signal_cloud::OperationKind::Observe,
-                        provider,
-                        Some(Capability::DomainNameSystemRecords),
-                    ) {
-                        return reply;
-                    }
-                    if !self.provider_is_configured(provider) {
-                        return CloudReply::RequestUnsupported(RequestUnsupported {
-                            operation: signal_cloud::OperationKind::Observe,
-                            provider: Some(provider),
-                            capability: Some(Capability::DomainNameSystemRecords),
-                            reason: UnsupportedReason::ProviderNotConfigured,
-                        });
-                    }
-                }
-                CloudReply::Observed(ObservationResult::Zones(self.zones()))
-            }
-            Observation::Records(query) => {
-                if let Some(reply) = self.unsupported_provider_reply(
-                    signal_cloud::OperationKind::Observe,
-                    query.provider,
-                    Some(Capability::DomainNameSystemRecords),
-                ) {
-                    return reply;
-                }
-                if !Self::provider_supports_capability(
-                    query.provider,
-                    Capability::DomainNameSystemRecords,
-                ) {
-                    return CloudReply::RequestUnsupported(RequestUnsupported {
-                        operation: signal_cloud::OperationKind::Observe,
-                        provider: Some(query.provider),
-                        capability: Some(Capability::DomainNameSystemRecords),
-                        reason: UnsupportedReason::CapabilityNotCompiled,
-                    });
-                }
-                if !self.provider_is_configured(query.provider) {
-                    return CloudReply::RequestUnsupported(RequestUnsupported {
-                        operation: signal_cloud::OperationKind::Observe,
-                        provider: Some(query.provider),
-                        capability: Some(Capability::DomainNameSystemRecords),
-                        reason: UnsupportedReason::ProviderNotConfigured,
-                    });
-                }
-                CloudReply::Observed(ObservationResult::Records(RecordListing {
-                    records: vec![],
-                }))
-            }
+            Observation::Zones(query) => self.observe_zones(query),
+            Observation::Records(query) => self.observe_records(query),
             Observation::Redirects(query) => {
-                if let Some(reply) = self.unsupported_provider_reply(
-                    signal_cloud::OperationKind::Observe,
-                    query.provider,
-                    Some(Capability::RedirectRules),
-                ) {
+                if let Some(reply) =
+                    self.unsupported_provider_reply(query.provider, Some(Capability::RedirectRules))
+                {
                     return reply;
                 }
                 if !Self::provider_supports_capability(query.provider, Capability::RedirectRules) {
                     return CloudReply::RequestUnsupported(RequestUnsupported {
-                        operation: signal_cloud::OperationKind::Observe,
                         provider: Some(query.provider),
                         capability: Some(Capability::RedirectRules),
                         reason: UnsupportedReason::CapabilityNotCompiled,
@@ -229,7 +238,6 @@ impl Store {
                 }
                 if !self.provider_is_configured(query.provider) {
                     return CloudReply::RequestUnsupported(RequestUnsupported {
-                        operation: signal_cloud::OperationKind::Observe,
                         provider: Some(query.provider),
                         capability: Some(Capability::RedirectRules),
                         reason: UnsupportedReason::ProviderNotConfigured,
@@ -271,6 +279,58 @@ impl Store {
         CapabilityReport { capabilities }
     }
 
+    fn observe_zones(&self, query: ZoneQuery) -> CloudReply {
+        if let Some(provider) = query.provider {
+            if let Some(reply) =
+                self.unsupported_provider_reply(provider, Some(Capability::DomainNameSystemRecords))
+            {
+                return reply;
+            }
+            if !self.provider_is_configured(provider) {
+                return CloudReply::RequestUnsupported(RequestUnsupported {
+                    provider: Some(provider),
+                    capability: Some(Capability::DomainNameSystemRecords),
+                    reason: UnsupportedReason::ProviderNotConfigured,
+                });
+            }
+            #[cfg(feature = "cloudflare")]
+            if provider == Provider::Cloudflare {
+                return self.observe_cloudflare_zones(query.account);
+            }
+        }
+        CloudReply::Observed(ObservationResult::Zones(self.zones()))
+    }
+
+    fn observe_records(&self, query: RecordQuery) -> CloudReply {
+        if let Some(reply) = self
+            .unsupported_provider_reply(query.provider, Some(Capability::DomainNameSystemRecords))
+        {
+            return reply;
+        }
+        if !Self::provider_supports_capability(query.provider, Capability::DomainNameSystemRecords)
+        {
+            return CloudReply::RequestUnsupported(RequestUnsupported {
+                provider: Some(query.provider),
+                capability: Some(Capability::DomainNameSystemRecords),
+                reason: UnsupportedReason::CapabilityNotCompiled,
+            });
+        }
+        if !self.provider_is_configured(query.provider) {
+            return CloudReply::RequestUnsupported(RequestUnsupported {
+                provider: Some(query.provider),
+                capability: Some(Capability::DomainNameSystemRecords),
+                reason: UnsupportedReason::ProviderNotConfigured,
+            });
+        }
+        #[cfg(feature = "cloudflare")]
+        if query.provider == Provider::Cloudflare {
+            return self.observe_cloudflare_records(query);
+        }
+        CloudReply::Observed(ObservationResult::Records(RecordListing {
+            records: vec![],
+        }))
+    }
+
     fn zones(&self) -> ZoneListing {
         let accounts = self.accounts.lock().expect("accounts mutex");
         let policy = self.policy.lock().expect("policy mutex");
@@ -300,12 +360,208 @@ impl Store {
         ZoneListing { zones }
     }
 
+    pub fn last_known_records(
+        &self,
+        provider: Provider,
+        zone: &DomainName,
+    ) -> Option<RecordListing> {
+        self.last_known_records
+            .lock()
+            .expect("last known records mutex")
+            .iter()
+            .find(|listing| listing.provider == provider && &listing.zone == zone)
+            .map(|listing| listing.listing.clone())
+    }
+
+    pub fn last_known_zones(&self) -> ZoneListing {
+        ZoneListing {
+            zones: self
+                .last_known_zones
+                .lock()
+                .expect("last known zones mutex")
+                .clone(),
+        }
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn observe_cloudflare_zones(
+        &self,
+        account: Option<owner_signal_cloud::ProviderAccount>,
+    ) -> CloudReply {
+        match self.cloudflare_zone_listing(account) {
+            Ok(listing) => CloudReply::Observed(ObservationResult::Zones(listing)),
+            Err(cloudflare::Error::CredentialUnavailable(_)) => {
+                CloudReply::RequestUnsupported(RequestUnsupported {
+                    provider: Some(Provider::Cloudflare),
+                    capability: Some(Capability::DomainNameSystemRecords),
+                    reason: UnsupportedReason::ProviderNotConfigured,
+                })
+            }
+            Err(_) => CloudReply::RequestRejected(RequestRejected {
+                reason: signal_cloud::RejectionReason::ProviderUnavailable,
+            }),
+        }
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn observe_cloudflare_records(&self, query: RecordQuery) -> CloudReply {
+        match self.cloudflare_record_listing(&query.zone) {
+            Ok(listing) => CloudReply::Observed(ObservationResult::Records(listing)),
+            Err(cloudflare::Error::CredentialUnavailable(_)) => {
+                CloudReply::RequestUnsupported(RequestUnsupported {
+                    provider: Some(Provider::Cloudflare),
+                    capability: Some(Capability::DomainNameSystemRecords),
+                    reason: UnsupportedReason::ProviderNotConfigured,
+                })
+            }
+            Err(_) => CloudReply::RequestRejected(RequestRejected {
+                reason: signal_cloud::RejectionReason::ProviderUnavailable,
+            }),
+        }
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn cloudflare_zone_listing(
+        &self,
+        account: Option<owner_signal_cloud::ProviderAccount>,
+    ) -> cloudflare::Result<ZoneListing> {
+        let bindings = self.account_bindings(Provider::Cloudflare, account);
+        let mut zones = Vec::new();
+        for binding in bindings {
+            let zone_names = self.allowed_zone_names(&binding.account);
+            zones.extend(self.cloudflare.zones(
+                &binding.account,
+                &binding.credential,
+                &zone_names,
+            )?);
+        }
+        self.replace_last_known_zones(zones.clone());
+        Ok(ZoneListing { zones })
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn cloudflare_record_listing(&self, zone: &DomainName) -> cloudflare::Result<RecordListing> {
+        let binding = self
+            .account_binding_for_zone(Provider::Cloudflare, zone)
+            .ok_or_else(|| cloudflare::Error::ZoneNotFound(zone.as_str().to_owned()))?;
+        let zone_identifier = self.cloudflare_zone_identifier(&binding, zone)?;
+        let listing = self
+            .cloudflare
+            .records(&binding.credential, &zone_identifier)?;
+        self.replace_last_known_records(Provider::Cloudflare, zone.clone(), listing.clone());
+        Ok(listing)
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn cloudflare_zone_identifier(
+        &self,
+        binding: &AccountBinding,
+        zone: &DomainName,
+    ) -> cloudflare::Result<signal_cloud::ZoneIdentifier> {
+        self.cloudflare
+            .zones(
+                &binding.account,
+                &binding.credential,
+                std::slice::from_ref(zone),
+            )?
+            .into_iter()
+            .find(|candidate| candidate.name == *zone)
+            .map(|candidate| candidate.identifier)
+            .ok_or_else(|| cloudflare::Error::ZoneNotFound(zone.as_str().to_owned()))
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn account_bindings(
+        &self,
+        provider: Provider,
+        account: Option<owner_signal_cloud::ProviderAccount>,
+    ) -> Vec<AccountBinding> {
+        self.accounts
+            .lock()
+            .expect("accounts mutex")
+            .iter()
+            .filter(|binding| {
+                binding.provider == provider
+                    && account
+                        .as_ref()
+                        .is_none_or(|requested| &binding.account == requested)
+            })
+            .cloned()
+            .collect()
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn account_binding_for_zone(
+        &self,
+        provider: Provider,
+        zone: &DomainName,
+    ) -> Option<AccountBinding> {
+        let accounts = self.accounts.lock().expect("accounts mutex");
+        let policy = self.policy.lock().expect("policy mutex");
+        policy
+            .zones
+            .iter()
+            .find(|policy| {
+                policy.provider == provider
+                    && policy.allowed_zones.iter().any(|allowed| allowed == zone)
+            })
+            .and_then(|policy| {
+                accounts
+                    .iter()
+                    .find(|binding| {
+                        binding.provider == provider && binding.account == policy.account
+                    })
+                    .cloned()
+            })
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn allowed_zone_names(&self, account: &owner_signal_cloud::ProviderAccount) -> Vec<DomainName> {
+        self.policy
+            .lock()
+            .expect("policy mutex")
+            .zones
+            .iter()
+            .filter(|policy| policy.provider == Provider::Cloudflare && &policy.account == account)
+            .flat_map(|policy| policy.allowed_zones.clone())
+            .collect()
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn replace_last_known_zones(&self, zones: Vec<Zone>) {
+        *self
+            .last_known_zones
+            .lock()
+            .expect("last known zones mutex") = zones;
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn replace_last_known_records(
+        &self,
+        provider: Provider,
+        zone: DomainName,
+        listing: RecordListing,
+    ) {
+        let mut records = self
+            .last_known_records
+            .lock()
+            .expect("last known records mutex");
+        if let Some(existing) = records
+            .iter_mut()
+            .find(|listing| listing.provider == provider && listing.zone == zone)
+        {
+            existing.listing = listing;
+        } else {
+            records.push(CachedRecordListing {
+                provider,
+                zone,
+                listing,
+            });
+        }
+    }
+
     fn validate(&self, desired_state: DesiredState) -> CloudReply {
-        if let Some(reply) = self.unsupported_provider_reply(
-            signal_cloud::OperationKind::Validate,
-            desired_state.provider,
-            None,
-        ) {
+        if let Some(reply) = self.unsupported_provider_reply(desired_state.provider, None) {
             return reply;
         }
         if !desired_state.records.is_empty()
@@ -315,7 +571,6 @@ impl Store {
             )
         {
             return CloudReply::RequestUnsupported(RequestUnsupported {
-                operation: signal_cloud::OperationKind::Validate,
                 provider: Some(desired_state.provider),
                 capability: Some(Capability::DomainNameSystemRecords),
                 reason: UnsupportedReason::CapabilityNotCompiled,
@@ -328,7 +583,6 @@ impl Store {
             )
         {
             return CloudReply::RequestUnsupported(RequestUnsupported {
-                operation: signal_cloud::OperationKind::Validate,
                 provider: Some(desired_state.provider),
                 capability: Some(Capability::RedirectRules),
                 reason: UnsupportedReason::CapabilityNotCompiled,
@@ -336,7 +590,6 @@ impl Store {
         }
         if !self.provider_is_configured(desired_state.provider) {
             return CloudReply::RequestUnsupported(RequestUnsupported {
-                operation: signal_cloud::OperationKind::Validate,
                 provider: Some(desired_state.provider),
                 capability: None,
                 reason: UnsupportedReason::ProviderNotConfigured,
@@ -354,13 +607,11 @@ impl Store {
         } = preparation.desired_state;
         if !Self::provider_is_built(provider) {
             return OwnerReply::RequestRejected(OwnerRequestRejected {
-                operation: owner_signal_cloud::OperationKind::PreparePlan,
                 reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         }
         if !self.provider_is_configured(provider) {
             return OwnerReply::RequestRejected(OwnerRequestRejected {
-                operation: owner_signal_cloud::OperationKind::PreparePlan,
                 reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         }
@@ -388,7 +639,6 @@ impl Store {
         {
             Some(plan) => CloudReply::Observed(ObservationResult::Plan(plan)),
             None => CloudReply::RequestRejected(RequestRejected {
-                operation: signal_cloud::OperationKind::Observe,
                 reason: signal_cloud::RejectionReason::PlanExpired,
             }),
         }
@@ -438,7 +688,6 @@ impl Store {
             })
         } else {
             OwnerReply::RequestRejected(OwnerRequestRejected {
-                operation: owner_signal_cloud::OperationKind::RotateCredential,
                 reason: owner_signal_cloud::RejectionReason::AccountUnknown,
             })
         }
@@ -457,7 +706,6 @@ impl Store {
     fn approve_plan(&self, approval: Approval) -> OwnerReply {
         if !self.plan_exists(&approval.plan) {
             return OwnerReply::RequestRejected(OwnerRequestRejected {
-                operation: owner_signal_cloud::OperationKind::ApprovePlan,
                 reason: owner_signal_cloud::RejectionReason::PlanUnknown,
             });
         }
@@ -473,7 +721,6 @@ impl Store {
     fn apply_plan(&self, application: Application) -> OwnerReply {
         if !self.plan_exists(&application.plan) {
             return OwnerReply::RequestRejected(OwnerRequestRejected {
-                operation: owner_signal_cloud::OperationKind::ApplyPlan,
                 reason: owner_signal_cloud::RejectionReason::PlanUnknown,
             });
         }
@@ -485,12 +732,10 @@ impl Store {
             .any(|plan| plan == &application.plan)
         {
             return OwnerReply::RequestRejected(OwnerRequestRejected {
-                operation: owner_signal_cloud::OperationKind::ApplyPlan,
                 reason: owner_signal_cloud::RejectionReason::PlanNotApproved,
             });
         }
         OwnerReply::RequestRejected(OwnerRequestRejected {
-            operation: owner_signal_cloud::OperationKind::ApplyPlan,
             reason: owner_signal_cloud::RejectionReason::CapabilityUnauthorized,
         })
     }
@@ -530,13 +775,11 @@ impl Store {
 
     fn unsupported_provider_reply(
         &self,
-        operation: signal_cloud::OperationKind,
         provider: Provider,
         capability: Option<Capability>,
     ) -> Option<CloudReply> {
         if !Self::provider_is_built(provider) {
             return Some(CloudReply::RequestUnsupported(RequestUnsupported {
-                operation,
                 provider: Some(provider),
                 capability,
                 reason: UnsupportedReason::ProviderNotBuilt,
