@@ -478,7 +478,7 @@ dependencies = [
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=cloud-domain-criome-runtime#5b3d0f5724f86892a1011701ad6eb199c308e7d3"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=cloud-domain-criome-runtime#a28a2df547d79468124665477f4b83bd3364890b"
 dependencies = [
  "nota-codec",
  "rkyv",

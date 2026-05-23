@@ -6,13 +6,17 @@ use cloud::client::{CliRequest, CommandLineDispatch};
 use cloud::daemon::Daemon;
 use cloud::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
 use nota_codec::NotaEncode;
+#[cfg(feature = "cloudflare")]
 use owner_signal_cloud::{
-    CapabilityDirective, CapabilityPolicy, CredentialHandle, Operation as OwnerOperation,
-    PlanPreparation, Policy, Registration, Reply as OwnerReply, ZonePolicy,
+    CapabilityDirective, CapabilityPolicy, PlanPreparation, Policy, ZonePolicy,
+};
+use owner_signal_cloud::{
+    CredentialHandle, Operation as OwnerOperation, Registration, Reply as OwnerReply,
 };
 use signal_cloud::{
-    Capability, CapabilityState, DomainName, Observation, Operation as CloudOperation, Provider,
-    ProviderAccount, Reply as CloudReply,
+    Capability, CapabilityReport, CapabilityState, DomainName, Observation,
+    Operation as CloudOperation, Provider, ProviderAccount, Reply as CloudReply,
+    RequestUnsupported, UnsupportedReason,
 };
 use signal_frame::{
     CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
@@ -31,6 +35,57 @@ fn exchange() -> ExchangeIdentifier {
         ExchangeLane::Connector,
         LaneSequence::first(),
     )
+}
+
+fn capability_report_over_socket(
+    store: Store,
+    provider: Provider,
+    capability: Capability,
+) -> CapabilityReport {
+    let (mut client_stream, mut daemon_stream) = UnixStream::pair().expect("socket pair");
+
+    thread::spawn(move || {
+        Daemon::serve_ordinary_stream(&store, &mut daemon_stream).expect("daemon serves");
+    });
+
+    let handshake = signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
+        HandshakeRequest::current(),
+    ));
+    OrdinaryFrameIo::write(&mut client_stream, &handshake).expect("write handshake");
+    let handshake_reply = OrdinaryFrameIo::read(&mut client_stream).expect("read handshake");
+    assert!(matches!(
+        handshake_reply.into_body(),
+        ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_))
+    ));
+
+    let operation =
+        CloudOperation::Observe(Observation::Capabilities(signal_cloud::CapabilityQuery {
+            provider: Some(provider),
+            capability: Some(capability),
+        }));
+    let exchange = exchange();
+    let request = operation.into_request();
+    let frame = signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
+    OrdinaryFrameIo::write(&mut client_stream, &frame).expect("write request");
+
+    let reply = OrdinaryFrameIo::read(&mut client_stream).expect("read reply");
+    match reply.into_body() {
+        ExchangeFrameBody::Reply {
+            exchange: reply_exchange,
+            reply: FrameReply::Accepted { per_operation, .. },
+        } => {
+            assert_eq!(reply_exchange, exchange);
+            let (head, tail) = per_operation.into_head_and_tail();
+            assert!(tail.is_empty());
+            match head {
+                SubReply::Ok(CloudReply::Observed(
+                    signal_cloud::ObservationResult::Capabilities(report),
+                )) => report,
+                other => panic!("unexpected reply {other:?}"),
+            }
+        }
+        other => panic!("unexpected frame {other:?}"),
+    }
 }
 
 #[test]
@@ -81,57 +136,75 @@ fn command_line_request_decodes_owner_contract_by_head() {
 
 #[test]
 fn daemon_answers_working_capability_observation_over_frame_socket() {
+    let report = capability_report_over_socket(
+        Store::new(),
+        Provider::Cloudflare,
+        Capability::DomainNameSystemRecords,
+    );
+    let expected_state = if cfg!(feature = "cloudflare") {
+        CapabilityState::Compiled
+    } else {
+        CapabilityState::NotBuilt
+    };
+
+    assert_eq!(report.capabilities.len(), 1);
+    assert_eq!(report.capabilities[0].state, expected_state);
+}
+
+#[test]
+#[cfg(not(feature = "google-cloud"))]
+fn daemon_reports_not_built_provider_over_frame_socket() {
+    let report = capability_report_over_socket(
+        Store::new(),
+        Provider::GoogleCloud,
+        Capability::DomainNameSystemRecords,
+    );
+
+    assert_eq!(report.capabilities.len(), 1);
+    assert_eq!(report.capabilities[0].state, CapabilityState::NotBuilt);
+}
+
+#[test]
+#[cfg(not(feature = "google-cloud"))]
+fn not_built_provider_dispatch_is_never_configured() {
     let store = Store::new();
-    let (mut client_stream, mut daemon_stream) = UnixStream::pair().expect("socket pair");
-
-    thread::spawn(move || {
-        Daemon::serve_ordinary_stream(&store, &mut daemon_stream).expect("daemon serves");
-    });
-
-    let handshake = signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
-        HandshakeRequest::current(),
-    ));
-    OrdinaryFrameIo::write(&mut client_stream, &handshake).expect("write handshake");
-    let handshake_reply = OrdinaryFrameIo::read(&mut client_stream).expect("read handshake");
+    let registration = OwnerOperation::RegisterAccount(Registration {
+        provider: Provider::GoogleCloud,
+        account: ProviderAccount::new("primary"),
+        credential: CredentialHandle::new("google-cloud-dns-token"),
+    })
+    .into_request();
     assert!(matches!(
-        handshake_reply.into_body(),
-        ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_))
+        store.handle_owner_request(registration),
+        FrameReply::Accepted { .. }
     ));
 
-    let operation =
-        CloudOperation::Observe(Observation::Capabilities(signal_cloud::CapabilityQuery {
-            provider: Some(Provider::Cloudflare),
-            capability: Some(Capability::DomainNameSystemRecords),
-        }));
-    let exchange = exchange();
-    let request = operation.into_request();
-    let frame = signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-    OrdinaryFrameIo::write(&mut client_stream, &frame).expect("write request");
+    let request = CloudOperation::Observe(Observation::Records(signal_cloud::RecordQuery {
+        provider: Provider::GoogleCloud,
+        zone: DomainName::new("goldragon.criome"),
+    }))
+    .into_request();
 
-    let reply = OrdinaryFrameIo::read(&mut client_stream).expect("read reply");
-    match reply.into_body() {
-        ExchangeFrameBody::Reply {
-            exchange: reply_exchange,
-            reply: FrameReply::Accepted { per_operation, .. },
-        } => {
-            assert_eq!(reply_exchange, exchange);
-            let (head, tail) = per_operation.into_head_and_tail();
-            assert!(tail.is_empty());
-            match head {
-                SubReply::Ok(CloudReply::Observed(
-                    signal_cloud::ObservationResult::Capabilities(report),
-                )) => {
-                    assert_eq!(report.capabilities.len(), 1);
-                    assert_eq!(report.capabilities[0].state, CapabilityState::Compiled);
-                }
-                other => panic!("unexpected reply {other:?}"),
+    match store.handle_ordinary_request(request) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(CloudReply::RequestUnsupported(RequestUnsupported {
+                provider,
+                capability,
+                reason,
+                ..
+            })) => {
+                assert_eq!(provider, Some(Provider::GoogleCloud));
+                assert_eq!(capability, Some(Capability::DomainNameSystemRecords));
+                assert_eq!(reason, UnsupportedReason::ProviderNotBuilt);
             }
-        }
-        other => panic!("unexpected frame {other:?}"),
+            other => panic!("unexpected observe reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
     }
 }
 
 #[test]
+#[cfg(feature = "cloudflare")]
 fn owner_policy_enables_planning_but_apply_requires_provider_authority() {
     let store = Store::new();
 

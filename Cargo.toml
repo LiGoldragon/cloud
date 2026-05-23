@@ -19,6 +19,12 @@ path = "src/bin/cloud-daemon.rs"
 name = "cloud"
 path = "src/bin/cloud.rs"
 
+[features]
+default = ["cloudflare"]
+cloudflare = []
+google-cloud = []
+hetzner = []
+
 [dependencies]
 nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
 nota-config       = { git = "https://github.com/LiGoldragon/nota-config.git", branch = "main" }
