@@ -1,0 +1,38 @@
+{}
+
+[
+  (Observe [Provider Capability Plan])
+  (Validate [DesiredState])
+]
+
+[
+  (Credential [Register Retire])
+  (Policy [ApprovePlan ApplyPlan])
+]
+
+[]
+
+{
+  Observe [(Provider Provider) (Capability Capability) (Plan Plan)]
+  Validate [(DesiredState DesiredState)]
+  Credential [(Register Register) (Retire Retire)]
+  Policy [(ApprovePlan ApprovePlan) (ApplyPlan ApplyPlan)]
+  Provider (Text)
+  Capability (Text)
+  Plan (Text)
+  DesiredState (Text)
+  Register (Text)
+  Retire (Text)
+  ApprovePlan (Text)
+  ApplyPlan (Text)
+  Text (String)
+  Identifier (u64)
+  Name (String)
+  Path (String)
+  Status [Concept Active Retired]
+}
+
+[
+  (Version 0 1)
+  (Status Concept)
+]
