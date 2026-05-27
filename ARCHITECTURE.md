@@ -27,6 +27,34 @@ exactly one Signal peer: `cloud-daemon`.
 does not decide which Criome domains should exist; it applies provider-facing
 plans from authorized inputs.
 
+## Cloud is a Nexus-IO component (records 965 + 970)
+
+Per spirit records 965 + 970 (Maximum, 2026-05-27): the cloud
+component is the **canonical nexus-IO example** the psyche named.
+`cloud`'s Cloudflare-facing logic — `flarectl` shell-outs, HTTP
+API adapters — is a Nexus schema in the workspace three-schema-type
+framing (record 964). The cloud daemon has **THREE EXECUTION
+CENTERS**:
+
+| Center | Schema type | What runs in cloud |
+|---|---|---|
+| **Signal** | `signal-cloud` + `owner-signal-cloud` | Ordinary observation surface + privileged plan-preparation surface |
+| **Nexus** | (future) `cloud.nexus.schema` | `flarectl` shell-outs, HTTP API calls, plan execution, rate-limit gating — Nexus is the **MAIL KEEPER**: while Nexus holds the in-flight provider call, the mail is in BEING-PROCESSED state |
+| **SEMA** | (future) `cloud.sema.schema` | Account / credential-handle / capability / zone policy + prepared plans + last-known cache (currently in-memory per record 687) |
+
+Per record 970: Nexus is the daemon's mail keeper + Signal-to-SEMA
+translator. The on_sent hook (record 963) fires when Signal hands
+mail TO Nexus; the database marker (record 935) travels on the SEMA
+reply Nexus receives and Nexus propagates it back in the Signal
+response.
+
+The schema-engine cutover is deferred per record 684 (Maximum); the
+production slice continues on the old Rust signal-macro path per
+record 679 (Maximum). The three-execution-center framing applies
+architecturally regardless of whether the schema engine drives the
+code today; the engine will absorb the existing shape when the
+cutover lands.
+
 ## Actor Shape
 
 The first daemon should use one actor per concern:
