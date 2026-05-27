@@ -139,6 +139,24 @@ architectural layer.
   meaning; `cloud` does not decide which Criome domains should
   exist; it applies provider-facing plans from authorized inputs.
 
+## Recurring patterns realised in this repo
+
+Per spirit record 988 (Maximum, 2026-05-27) + workspace INTENT.md
+§"Recurring architectural patterns": cloud is a normal
+three-execution-center daemon with the Cloudflare CLI shell-out
+as a Nexus-side external IO. cloud realises:
+
+- **Pattern A — Async lives at the data-type level.** Cloud's
+  signal messages carry their own lifecycle state; provider-call
+  results return as typed replies through the same mail mechanism
+  every other daemon uses (records 935, 962, 963, 970).
+- **Pattern B — Three execution centers.** Cloud realises the
+  general daemon shape; the Cloudflare CLI is specifically a
+  Nexus-side external IO (record 965 names this exact example).
+- **Pattern C — Methods on schema-generated data types.** Cloud's
+  hand-written Rust attaches behaviour to schema-emitted nouns;
+  no free helpers, no ZST namespace holders.
+
 ## Continuous manifestation
 
 Per spirit record 944 (Maximum, 2026-05-27): this `INTENT.md` is
