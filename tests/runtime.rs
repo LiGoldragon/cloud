@@ -14,7 +14,8 @@ use cloud::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
 use nota_codec::NotaEncode;
 #[cfg(feature = "cloudflare")]
 use owner_signal_cloud::{
-    CapabilityDirective, CapabilityPolicy, PlanPreparation, Policy, ZonePolicy,
+    CapabilityDirective, CapabilityPolicy, PlanPreparation, Policy, ProjectionPreparation,
+    ZonePolicy,
 };
 use owner_signal_cloud::{
     CredentialHandle, Operation as OwnerOperation, Registration, Reply as OwnerReply,
@@ -28,6 +29,7 @@ use signal_cloud::{
 use signal_cloud::{
     DomainNameSystemRecord, ProxyMode, RecordKind, RecordListing, RecordValue, ZoneIdentifier,
 };
+use signal_domain_criome::{Projection, ProjectionQuery, ProjectionScope};
 use signal_frame::{
     CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
     HandshakeRequest, LaneSequence, Reply as FrameReply, RequestPayload, SessionEpoch, SubReply,
@@ -308,6 +310,12 @@ fn command_line_dispatch_routes_working_and_owner_heads() {
         dispatch.route_head("PreparePlan").expect("owner head"),
         CommandLineSocket::Owner
     );
+    assert_eq!(
+        dispatch
+            .route_head("PrepareProjection")
+            .expect("owner head"),
+        CommandLineSocket::Owner
+    );
 }
 
 #[test]
@@ -380,7 +388,7 @@ fn not_built_provider_dispatch_is_never_configured() {
     .into_request();
     assert!(matches!(
         store.handle_owner_request(registration),
-        FrameReply::Accepted { .. }
+        FrameReply::Accepted { .. } | FrameReply::Rejected { .. }
     ));
 
     let request = CloudOperation::Observe(Observation::Records(signal_cloud::RecordQuery {
@@ -451,7 +459,22 @@ fn cloudflare_record_observation_uses_provider_actor_and_caches_last_known_state
 #[cfg(feature = "cloudflare")]
 fn cloudflare_record_observation_requires_credential_environment() {
     let (store, api) = cloudflare_fixture_store(FixtureCredentialSource::missing());
-    configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
+    let registration = OwnerOperation::RegisterAccount(Registration {
+        provider: Provider::Cloudflare,
+        account: ProviderAccount::new("primary"),
+        credential: CredentialHandle::new("CLOUDFLARE_DNS_TOKEN"),
+    })
+    .into_request();
+    match store.handle_owner_request(registration) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(OwnerReply::RequestRejected(rejection)) => assert_eq!(
+                rejection.reason,
+                owner_signal_cloud::RejectionReason::CredentialHandleUnknown
+            ),
+            other => panic!("unexpected registration reply {other:?}"),
+        },
+        other => panic!("unexpected registration frame reply {other:?}"),
+    }
 
     let request = CloudOperation::Observe(Observation::Records(signal_cloud::RecordQuery {
         provider: Provider::Cloudflare,
@@ -481,6 +504,42 @@ fn cloudflare_record_observation_requires_credential_environment() {
             .last_known_records(Provider::Cloudflare, &DomainName::new("goldragon.criome"))
             .is_none()
     );
+}
+
+#[test]
+#[cfg(feature = "cloudflare")]
+fn validation_reports_malformed_dns_record_values() {
+    let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
+    configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
+
+    let request = CloudOperation::Validate(signal_cloud::Validation {
+        desired_state: signal_cloud::DesiredState {
+            provider: Provider::Cloudflare,
+            zone: DomainName::new("goldragon.criome"),
+            records: vec![DomainNameSystemRecord {
+                name: DomainName::new("goldragon.criome"),
+                kind: RecordKind::AddressV4,
+                value: RecordValue::new("not-an-ip"),
+                proxy_mode: ProxyMode::Direct,
+            }],
+            redirects: vec![],
+        },
+    })
+    .into_request();
+
+    match store.handle_ordinary_request(request) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(CloudReply::Validated(report)) => {
+                assert_eq!(report.findings.len(), 1);
+                assert_eq!(
+                    report.findings[0].severity,
+                    signal_cloud::FindingSeverity::Error
+                );
+            }
+            other => panic!("unexpected validation reply {other:?}"),
+        },
+        other => panic!("unexpected validation frame reply {other:?}"),
+    }
 }
 
 #[test]
@@ -518,6 +577,9 @@ fn owner_policy_allows_approved_dns_plan_application() {
         },
         other => panic!("unexpected plan frame reply {other:?}"),
     };
+    assert_eq!(plan.records_to_create.len(), 1);
+    assert_eq!(plan.records_to_update.len(), 1);
+    assert!(plan.record_names_to_delete.is_empty());
 
     let approval = OwnerOperation::ApprovePlan(owner_signal_cloud::Approval {
         plan: plan.identifier.clone(),
@@ -565,8 +627,79 @@ fn owner_policy_allows_approved_dns_plan_application() {
 }
 
 #[test]
+#[cfg(feature = "cloudflare")]
+fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
+    let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
+    configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
+
+    let plan_request = OwnerOperation::PrepareProjection(ProjectionPreparation {
+        provider: Provider::Cloudflare,
+        projection: Projection {
+            query: ProjectionQuery {
+                domain: signal_domain_criome::DomainName::new("goldragon.criome"),
+                scope: ProjectionScope::PublicRecords,
+            },
+            records: vec![signal_domain_criome::DomainNameSystemRecord {
+                name: signal_domain_criome::DomainName::new("goldragon.criome"),
+                kind: signal_domain_criome::RecordKind::AddressV4,
+                value: signal_domain_criome::RecordValue::new("203.0.113.10"),
+            }],
+            redirects: vec![],
+        },
+    })
+    .into_request();
+    let plan = match store.handle_owner_request(plan_request) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(OwnerReply::PlanPrepared(plan)) => plan,
+            other => panic!("unexpected projection plan reply {other:?}"),
+        },
+        other => panic!("unexpected projection plan frame reply {other:?}"),
+    };
+    assert_eq!(plan.records_to_create.len(), 0);
+    assert_eq!(plan.records_to_update.len(), 1);
+    assert_eq!(plan.records_to_update[0].proxy_mode, ProxyMode::Direct);
+
+    let approval = OwnerOperation::ApprovePlan(owner_signal_cloud::Approval {
+        plan: plan.identifier.clone(),
+    })
+    .into_request();
+    assert!(matches!(
+        store.handle_owner_request(approval),
+        FrameReply::Accepted { .. }
+    ));
+
+    let application = OwnerOperation::ApplyPlan(owner_signal_cloud::Application {
+        plan: plan.identifier,
+    })
+    .into_request();
+    match store.handle_owner_request(application) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(OwnerReply::PlanApplied(_)) => {}
+            other => panic!("unexpected projection apply reply {other:?}"),
+        },
+        other => panic!("unexpected projection apply frame reply {other:?}"),
+    }
+
+    let expected = RecordListing {
+        records: vec![DomainNameSystemRecord {
+            name: DomainName::new("goldragon.criome"),
+            kind: RecordKind::AddressV4,
+            value: RecordValue::new("203.0.113.10"),
+            proxy_mode: ProxyMode::Direct,
+        }],
+    };
+    assert_eq!(
+        store
+            .last_known_records(Provider::Cloudflare, &DomainName::new("goldragon.criome"))
+            .expect("last known records"),
+        expected
+    );
+}
+
+#[test]
+#[cfg(feature = "cloudflare")]
 fn daemon_answers_owner_registration_over_frame_socket() {
-    let store = Store::new();
+    let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
     let (mut client_stream, mut daemon_stream) = UnixStream::pair().expect("socket pair");
 
     thread::spawn(move || {

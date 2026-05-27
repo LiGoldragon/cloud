@@ -37,7 +37,16 @@
           inherit src;
           strictDeps = true;
         };
-        cloudRuntimePath = pkgs.lib.makeBinPath [ pkgs.flarectl ];
+        cloudflareCli = pkgs.symlinkJoin {
+          name = "flarectl-gopass-wrapped";
+          paths = [ pkgs.flarectl ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/flarectl \
+              --run 'CF_API_TOKEN=$(${pkgs.gopass}/bin/gopass show -o cloudflare/api-token) || { echo "cloud: cannot fetch CF_API_TOKEN from gopass cloudflare/api-token" >&2; exit 78; }; export CF_API_TOKEN'
+          '';
+        };
+        cloudRuntimePath = pkgs.lib.makeBinPath [ cloudflareCli ];
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
       in
       {
@@ -75,7 +84,7 @@
         devShells.default = pkgs.mkShell {
           name = "cloud";
           packages = [
-            pkgs.flarectl
+            cloudflareCli
             pkgs.jujutsu
             toolchain
           ];

@@ -305,6 +305,10 @@ impl ProviderClient {
         Self { api, credentials }
     }
 
+    pub fn verify_credential(&self, credential: &CredentialHandle) -> Result<()> {
+        self.credentials.token(credential).map(|_| ())
+    }
+
     pub fn zones(
         &self,
         account: &ProviderAccount,

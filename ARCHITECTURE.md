@@ -55,6 +55,14 @@ store. Slow provider work belongs behind provider actors with timeouts.
 8. Apply owner-approved DNS-record plans through the daemon-owned Cloudflare
    provider client. The production default uses `flarectl --json` for DNS
    record get/set; `HttpApi` remains available as a direct-API adapter.
+9. Accept `domain-criome` provider-neutral projections through the owner
+   contract, lower them into provider plans, and apply those plans through the
+   same approval ceremony.
+10. Validate DNS desired-state content enough to reject malformed IPv4/IPv6
+   records and malformed redirect targets before planning.
+11. Prepare diff-aware DNS plans by comparing desired records against the last
+   provider state: create new records, update changed records, and delete
+   records omitted from desired state.
 
 `sema-engine` persistence is intentionally deferred because the current engine
 still pulls the deprecated `signal-core` dependency. The store boundary is kept
@@ -64,7 +72,9 @@ Cloudflare DNS observation and DNS-record application are production-shaped:
 ordinary reads use the ordinary Signal socket, owner-approved application uses
 the owner Signal socket, both read only owner-registered accounts and zones,
 and the daemon caches the last known record listing after Cloudflare accepts a
-read or mutation. Redirect observation and redirect mutation are future slices.
+read or mutation. Redirect observation and redirect mutation are future slices;
+until the Rulesets/Page-Rules read path exists, redirect requests return typed
+unsupported replies rather than silent empty listings.
 
 ## Hard Constraints
 

@@ -30,8 +30,9 @@ nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", bra
 nota-config       = { git = "https://github.com/LiGoldragon/nota-config.git", branch = "main" }
 owner-signal-cloud = { git = "https://github.com/LiGoldragon/owner-signal-cloud.git", branch = "main" }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
-signal-cloud      = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
-signal-frame      = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
+signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
+signal-domain-criome = { git = "https://github.com/LiGoldragon/signal-domain-criome.git", branch = "main" }
+signal-frame        = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
 serde             = { version = "1", features = ["derive"], optional = true }
 serde_json        = { version = "1", optional = true }
 thiserror         = "2"

@@ -94,6 +94,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-cloud",
+ "signal-domain-criome",
  "signal-frame",
  "tempfile",
  "thiserror",
@@ -449,7 +450,7 @@ dependencies = [
 [[package]]
 name = "nota-codec"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-codec.git?branch=main#d00fbf53808f941a173bfe473ca062e13029339e"
+source = "git+https://github.com/LiGoldragon/nota-codec.git?branch=main#f761421c383121a04df761a444a3778d1c0b137d"
 dependencies = [
  "camino",
  "nota-derive",
@@ -485,11 +486,12 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 [[package]]
 name = "owner-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/owner-signal-cloud.git?branch=main#7d7dbee4ec1cc629fd3c028a1c4f2cfe63666d80"
+source = "git+https://github.com/LiGoldragon/owner-signal-cloud.git?branch=main#927eb1652a5125fa7a53032e13f9e11cb30eaa8a"
 dependencies = [
  "nota-codec",
  "rkyv",
  "signal-cloud",
+ "signal-domain-criome",
  "signal-frame",
 ]
 
@@ -701,7 +703,7 @@ dependencies = [
 [[package]]
 name = "schema-rust"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#ee407c83b4fc116c243316563293488cc47b1bc1"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#d61ebf25997c47c997c0dce1d576f870e3e8383c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -774,9 +776,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-domain-criome"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/signal-domain-criome.git?branch=main#a89e36f06994ca28ce512e1bc059ac60e7c189e2"
+dependencies = [
+ "nota-codec",
+ "rkyv",
+ "signal-frame",
+]
+
+[[package]]
 name = "signal-frame"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#ee407c83b4fc116c243316563293488cc47b1bc1"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#d61ebf25997c47c997c0dce1d576f870e3e8383c"
 dependencies = [
  "nota-codec",
  "paste",
@@ -788,7 +800,7 @@ dependencies = [
 [[package]]
 name = "signal-frame-macros"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#ee407c83b4fc116c243316563293488cc47b1bc1"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#d61ebf25997c47c997c0dce1d576f870e3e8383c"
 dependencies = [
  "nota-codec",
  "proc-macro2",
