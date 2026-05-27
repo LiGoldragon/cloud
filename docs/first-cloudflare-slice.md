@@ -16,8 +16,13 @@ import/read-only material unless the owner explicitly asks for a migration or
 deletion operation.
 
 The runtime provides the daemon sockets, thin CLI, policy loading, plan
-generation, approval gate, typed apply rejection, and real Cloudflare DNS
-read-only observation. `Observe(Records(...))` resolves the configured zone
-through the Cloudflare API, lists DNS records, and caches the last known record
-listing in the runtime store. Redirect observation and live mutation remain
-future slices.
+generation, approval gate, real Cloudflare DNS observation, and owner-approved
+DNS record application. `Observe(Records(...))` resolves the configured zone
+through Cloudflare, lists DNS records, and caches the last known record listing
+in the runtime store. `ApplyPlan` can create, update, or delete DNS records
+after the owner has prepared and approved the plan. Redirect observation and
+redirect mutation remain future slices.
+
+The production default reaches Cloudflare through `flarectl --json` for DNS.
+The daemon package wraps `cloud-daemon` with `flarectl` in `PATH`; the CLI still
+speaks only to `cloud-daemon` and never invokes provider tools directly.

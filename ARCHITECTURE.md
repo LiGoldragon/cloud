@@ -52,17 +52,19 @@ store. Slow provider work belongs behind provider actors with timeouts.
 6. Require owner approval before apply.
 7. Resolve Cloudflare credential handles through environment variables and list
    Cloudflare zones and DNS records through the daemon-owned provider client.
-8. Reject approved apply with `CapabilityUnauthorized` until a real provider
-   actor owns live mutation.
+8. Apply owner-approved DNS-record plans through the daemon-owned Cloudflare
+   provider client. The production default uses `flarectl --json` for DNS
+   record get/set; `HttpApi` remains available as a direct-API adapter.
 
 `sema-engine` persistence is intentionally deferred because the current engine
 still pulls the deprecated `signal-core` dependency. The store boundary is kept
 small so persistence can be swapped in after that dependency is removed.
 
-Cloudflare record observation is production-shaped but intentionally read-only:
-it uses the ordinary Signal socket, reads only owner-registered accounts and
-zones, calls the Cloudflare API from the daemon, and caches the last known
-record listing. Redirect observation and live mutation are future slices.
+Cloudflare DNS observation and DNS-record application are production-shaped:
+ordinary reads use the ordinary Signal socket, owner-approved application uses
+the owner Signal socket, both read only owner-registered accounts and zones,
+and the daemon caches the last known record listing after Cloudflare accepts a
+read or mutation. Redirect observation and redirect mutation are future slices.
 
 ## Hard Constraints
 

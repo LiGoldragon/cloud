@@ -6,7 +6,9 @@ use std::thread;
 use cloud::Store;
 use cloud::client::{CliRequest, CommandLineDispatch};
 #[cfg(feature = "cloudflare")]
-use cloud::cloudflare::{Api as CloudflareApi, ApiRecord, ApiZone, CredentialSource, Token};
+use cloud::cloudflare::{
+    Api as CloudflareApi, ApiRecord, ApiZone, CredentialSource, RecordIdentifier, Token,
+};
 use cloud::daemon::Daemon;
 use cloud::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
 use nota_codec::NotaEncode;
@@ -77,7 +79,7 @@ impl CredentialSource for FixtureCredentialSource {
 #[derive(Debug)]
 struct FixtureCloudflareApi {
     zones: Vec<ApiZone>,
-    records: Vec<ApiRecord>,
+    records: Mutex<Vec<ApiRecord>>,
     queried_zones: Mutex<Vec<Option<String>>>,
     queried_record_zones: Mutex<Vec<String>>,
 }
@@ -90,12 +92,13 @@ impl FixtureCloudflareApi {
                 identifier: ZoneIdentifier::new("zone-one"),
                 name: DomainName::new("goldragon.criome"),
             }],
-            records: vec![ApiRecord {
+            records: Mutex::new(vec![ApiRecord {
+                identifier: RecordIdentifier::new("record-one"),
                 name: DomainName::new("goldragon.criome"),
                 kind: RecordKind::AddressV4,
                 value: RecordValue::new("203.0.113.7"),
                 proxy_mode: ProxyMode::ProviderProxy,
-            }],
+            }]),
             queried_zones: Mutex::new(Vec::new()),
             queried_record_zones: Mutex::new(Vec::new()),
         }
@@ -137,7 +140,62 @@ impl CloudflareApi for FixtureCloudflareApi {
             .lock()
             .expect("queried record zones")
             .push(zone.as_str().to_owned());
-        Ok(self.records.clone())
+        Ok(self.records.lock().expect("records").clone())
+    }
+
+    fn create_record(
+        &self,
+        _token: &Token,
+        _zone: &ZoneIdentifier,
+        record: &DomainNameSystemRecord,
+    ) -> cloud::cloudflare::Result<ApiRecord> {
+        let mut records = self.records.lock().expect("records");
+        let record = ApiRecord {
+            identifier: RecordIdentifier::new(format!("record-{}", records.len() + 1)),
+            name: record.name.clone(),
+            kind: record.kind,
+            value: record.value.clone(),
+            proxy_mode: record.proxy_mode,
+        };
+        records.push(record.clone());
+        Ok(record)
+    }
+
+    fn update_record(
+        &self,
+        _token: &Token,
+        _zone: &ZoneIdentifier,
+        identifier: &RecordIdentifier,
+        record: &DomainNameSystemRecord,
+    ) -> cloud::cloudflare::Result<ApiRecord> {
+        let mut records = self.records.lock().expect("records");
+        let Some(existing) = records
+            .iter_mut()
+            .find(|record| record.identifier == *identifier)
+        else {
+            return Err(cloud::cloudflare::Error::RequestRejected(format!(
+                "record {} not found",
+                identifier.as_str()
+            )));
+        };
+        existing.name = record.name.clone();
+        existing.kind = record.kind;
+        existing.value = record.value.clone();
+        existing.proxy_mode = record.proxy_mode;
+        Ok(existing.clone())
+    }
+
+    fn delete_record(
+        &self,
+        _token: &Token,
+        _zone: &ZoneIdentifier,
+        identifier: &RecordIdentifier,
+    ) -> cloud::cloudflare::Result<()> {
+        self.records
+            .lock()
+            .expect("records")
+            .retain(|record| record.identifier != *identifier);
+        Ok(())
     }
 }
 
@@ -427,49 +485,28 @@ fn cloudflare_record_observation_requires_credential_environment() {
 
 #[test]
 #[cfg(feature = "cloudflare")]
-fn owner_policy_enables_planning_but_apply_requires_provider_authority() {
-    let store = Store::new();
-
-    let registration = OwnerOperation::RegisterAccount(Registration {
-        provider: Provider::Cloudflare,
-        account: ProviderAccount::new("primary"),
-        credential: CredentialHandle::new("cloudflare-dns-token"),
-    })
-    .into_request();
-    match store.handle_owner_request(registration) {
-        FrameReply::Accepted { per_operation, .. } => {
-            assert!(matches!(
-                per_operation.head(),
-                SubReply::Ok(OwnerReply::AccountRegistered(_))
-            ));
-        }
-        other => panic!("unexpected registration reply {other:?}"),
-    }
-
-    let policy = OwnerOperation::SetPolicy(Policy {
-        zones: vec![ZonePolicy {
-            provider: Provider::Cloudflare,
-            account: ProviderAccount::new("primary"),
-            allowed_zones: vec![DomainName::new("goldragon.criome")],
-        }],
-        capabilities: vec![CapabilityPolicy {
-            provider: Provider::Cloudflare,
-            account: ProviderAccount::new("primary"),
-            capability: Capability::DomainNameSystemRecords,
-            directive: CapabilityDirective::Enable,
-        }],
-    })
-    .into_request();
-    assert!(matches!(
-        store.handle_owner_request(policy),
-        FrameReply::Accepted { .. }
-    ));
+fn owner_policy_allows_approved_dns_plan_application() {
+    let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
+    configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
 
     let plan_request = OwnerOperation::PreparePlan(PlanPreparation {
         desired_state: signal_cloud::DesiredState {
             provider: Provider::Cloudflare,
             zone: DomainName::new("goldragon.criome"),
-            records: Vec::new(),
+            records: vec![
+                DomainNameSystemRecord {
+                    name: DomainName::new("goldragon.criome"),
+                    kind: RecordKind::AddressV4,
+                    value: RecordValue::new("203.0.113.8"),
+                    proxy_mode: ProxyMode::ProviderProxy,
+                },
+                DomainNameSystemRecord {
+                    name: DomainName::new("www.goldragon.criome"),
+                    kind: RecordKind::CanonicalName,
+                    value: RecordValue::new("goldragon.criome"),
+                    proxy_mode: ProxyMode::ProviderProxy,
+                },
+            ],
             redirects: Vec::new(),
         },
     })
@@ -497,16 +534,34 @@ fn owner_policy_enables_planning_but_apply_requires_provider_authority() {
     .into_request();
     match store.handle_owner_request(application) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(OwnerReply::RequestRejected(rejection)) => {
-                assert_eq!(
-                    rejection.reason,
-                    owner_signal_cloud::RejectionReason::CapabilityUnauthorized
-                );
-            }
+            SubReply::Ok(OwnerReply::PlanApplied(_)) => {}
             other => panic!("unexpected apply reply {other:?}"),
         },
         other => panic!("unexpected apply frame reply {other:?}"),
     }
+
+    let expected = RecordListing {
+        records: vec![
+            DomainNameSystemRecord {
+                name: DomainName::new("goldragon.criome"),
+                kind: RecordKind::AddressV4,
+                value: RecordValue::new("203.0.113.8"),
+                proxy_mode: ProxyMode::ProviderProxy,
+            },
+            DomainNameSystemRecord {
+                name: DomainName::new("www.goldragon.criome"),
+                kind: RecordKind::CanonicalName,
+                value: RecordValue::new("goldragon.criome"),
+                proxy_mode: ProxyMode::ProviderProxy,
+            },
+        ],
+    };
+    assert_eq!(
+        store
+            .last_known_records(Provider::Cloudflare, &DomainName::new("goldragon.criome"))
+            .expect("last known records"),
+        expected
+    );
 }
 
 #[test]

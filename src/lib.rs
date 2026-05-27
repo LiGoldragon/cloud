@@ -25,6 +25,8 @@ use signal_frame::{NonEmpty, Reply as FrameReply, SubReply};
 pub mod client;
 #[cfg(feature = "cloudflare")]
 pub mod cloudflare;
+#[cfg(feature = "cloudflare")]
+pub mod cloudflare_cli;
 pub mod daemon;
 pub mod frame_io;
 
@@ -719,11 +721,11 @@ impl Store {
     }
 
     fn apply_plan(&self, application: Application) -> OwnerReply {
-        if !self.plan_exists(&application.plan) {
+        let Some(plan) = self.plan_for_identifier(&application.plan) else {
             return OwnerReply::RequestRejected(OwnerRequestRejected {
                 reason: owner_signal_cloud::RejectionReason::PlanUnknown,
             });
-        }
+        };
         if !self
             .approved_plans
             .lock()
@@ -735,9 +737,72 @@ impl Store {
                 reason: owner_signal_cloud::RejectionReason::PlanNotApproved,
             });
         }
-        OwnerReply::RequestRejected(OwnerRequestRejected {
-            reason: owner_signal_cloud::RejectionReason::CapabilityUnauthorized,
+        if Self::plan_includes_redirect_changes(&plan) {
+            return OwnerReply::RequestRejected(OwnerRequestRejected {
+                reason: owner_signal_cloud::RejectionReason::CapabilityUnauthorized,
+            });
+        }
+        match plan.provider {
+            Provider::Cloudflare => self.apply_cloudflare_plan(plan),
+            _ => OwnerReply::RequestRejected(OwnerRequestRejected {
+                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            }),
+        }
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn apply_cloudflare_plan(&self, plan: Plan) -> OwnerReply {
+        let Some(binding) = self.account_binding_for_zone(Provider::Cloudflare, &plan.zone) else {
+            return OwnerReply::RequestRejected(OwnerRequestRejected {
+                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        };
+        let zone_identifier = match self.cloudflare_zone_identifier(&binding, &plan.zone) {
+            Ok(identifier) => identifier,
+            Err(error) => return Self::owner_reply_for_cloudflare_error(error),
+        };
+        let listing = match self
+            .cloudflare
+            .apply_plan(&binding.credential, &zone_identifier, &plan)
+        {
+            Ok(listing) => listing,
+            Err(error) => return Self::owner_reply_for_cloudflare_error(error),
+        };
+        self.replace_last_known_records(Provider::Cloudflare, plan.zone.clone(), listing);
+        OwnerReply::PlanApplied(owner_signal_cloud::PlanApplied {
+            plan: plan.identifier,
         })
+    }
+
+    #[cfg(not(feature = "cloudflare"))]
+    fn apply_cloudflare_plan(&self, _plan: Plan) -> OwnerReply {
+        OwnerReply::RequestRejected(OwnerRequestRejected {
+            reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+        })
+    }
+
+    #[cfg(feature = "cloudflare")]
+    fn owner_reply_for_cloudflare_error(error: cloudflare::Error) -> OwnerReply {
+        let reason = match error {
+            cloudflare::Error::CredentialUnavailable(_) => {
+                owner_signal_cloud::RejectionReason::CredentialHandleUnknown
+            }
+            cloudflare::Error::ZoneNotFound(_) => {
+                owner_signal_cloud::RejectionReason::ProviderNotConfigured
+            }
+            cloudflare::Error::RequestFailed(_)
+            | cloudflare::Error::RequestRejected(_)
+            | cloudflare::Error::UnsupportedRecordKind(_) => {
+                owner_signal_cloud::RejectionReason::PlanGenerationFailed
+            }
+        };
+        OwnerReply::RequestRejected(OwnerRequestRejected { reason })
+    }
+
+    fn plan_includes_redirect_changes(plan: &Plan) -> bool {
+        !plan.redirects_to_create.is_empty()
+            || !plan.redirects_to_update.is_empty()
+            || !plan.redirect_sources_to_delete.is_empty()
     }
 
     fn retire_account(&self, retirement: Retirement) -> OwnerReply {
@@ -810,10 +875,15 @@ impl Store {
     }
 
     fn plan_exists(&self, identifier: &PlanIdentifier) -> bool {
+        self.plan_for_identifier(identifier).is_some()
+    }
+
+    fn plan_for_identifier(&self, identifier: &PlanIdentifier) -> Option<Plan> {
         self.plans
             .lock()
             .expect("plans mutex")
             .iter()
-            .any(|plan| &plan.identifier == identifier)
+            .find(|plan| &plan.identifier == identifier)
+            .cloned()
     }
 }

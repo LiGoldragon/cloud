@@ -92,6 +92,7 @@ dependencies = [
  "owner-signal-cloud",
  "rkyv",
  "serde",
+ "serde_json",
  "signal-cloud",
  "signal-frame",
  "tempfile",

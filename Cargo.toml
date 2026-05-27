@@ -21,7 +21,7 @@ path = "src/bin/cloud.rs"
 
 [features]
 default = ["cloudflare"]
-cloudflare = ["dep:serde", "dep:ureq"]
+cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
 google-cloud = []
 hetzner = []
 
@@ -33,6 +33,7 @@ rkyv              = { version = "0.8", default-features = false, features = ["st
 signal-cloud      = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
 signal-frame      = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
 serde             = { version = "1", features = ["derive"], optional = true }
+serde_json        = { version = "1", optional = true }
 thiserror         = "2"
 ureq              = { version = "2", features = ["json"], optional = true }
 

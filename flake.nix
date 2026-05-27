@@ -37,6 +37,7 @@
           inherit src;
           strictDeps = true;
         };
+        cloudRuntimePath = pkgs.lib.makeBinPath [ pkgs.flarectl ];
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
       in
       {
@@ -44,6 +45,10 @@
           commonArgs
           // {
             inherit cargoArtifacts;
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            postInstall = ''
+              wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath}
+            '';
           }
         );
 
@@ -70,6 +75,7 @@
         devShells.default = pkgs.mkShell {
           name = "cloud";
           packages = [
+            pkgs.flarectl
             pkgs.jujutsu
             toolchain
           ];
