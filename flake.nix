@@ -37,8 +37,29 @@
           inherit src;
           strictDeps = true;
         };
-        cloudRuntimePath = pkgs.lib.makeBinPath [ pkgs.flarectl ];
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        # Cloudflare CLI runtime dependency. The `cloudflare` Cargo
+        # feature (default) shells out to flarectl from the
+        # cloudflare_cli adapter; wrapping cloud-daemon with flarectl
+        # on PATH means the daemon never relies on whatever happens to
+        # be in the user profile. Per psyche 2026-05-27 (spirit 923).
+        #
+        # The flarectl binary is itself wrapped so that CF_API_TOKEN
+        # is populated from gopass at `cloudflare/api-token` before
+        # exec. This realises the FEMOS env-var-populated-by-password-
+        # manager auth pattern (spirit 682, 689, 924) end-to-end
+        # inside the nix closure — no human-driven env-var management
+        # at daemon start.
+        cloudflareCli = pkgs.symlinkJoin {
+          name = "flarectl-gopass-wrapped";
+          paths = [ pkgs.flarectl ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/flarectl \
+              --run 'export CF_API_TOKEN=$(${pkgs.gopass}/bin/gopass show -o cloudflare/api-token)'
+          '';
+        };
+        cloudRuntimePath = pkgs.lib.makeBinPath [ cloudflareCli ];
       in
       {
         packages.default = craneLib.buildPackage (
@@ -75,7 +96,7 @@
         devShells.default = pkgs.mkShell {
           name = "cloud";
           packages = [
-            pkgs.flarectl
+            cloudflareCli
             pkgs.jujutsu
             toolchain
           ];
