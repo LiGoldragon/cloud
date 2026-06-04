@@ -84,20 +84,28 @@ unsupported replies rather than silent empty listings.
 - No deprecated `signal-core` dependency in new code.
 - Cloudflare is a provider adapter, not the domain model.
 
-## Pending schema-engine upgrade
+## Schema-engine upgrade track
 
-**Status:** deferred for this production slice. Current cloud work stays on the
-hand-written Rust + `signal_channel!` contract path until the schema engine is
-ready to absorb the component without delaying Cloudflare DNS management.
+`main` keeps the production-shaped runtime on the hand-written Rust +
+`signal_channel!` path while the breaking schema-derived contract work proceeds
+on `next` branches. The current `next` prototypes are:
 
-**Target:** this component's hand-written `signal_channel!` invocation + Layer 2 Command/Effect + storage types convert to a single `cloud/cloud.schema` file. The brilliant macro library (`primary-ezqx.1`) reads the schema + emits all the wire types + ShortHeader projection + dispatcher + VersionProjection + storage descriptors.
+- `signal-cloud:next` — ordinary working signal generated from
+  `schema/lib.schema` and checked in as `src/schema/lib.rs`.
+- `owner-signal-cloud:next` — policy signal renamed in code to the
+  `meta-signal-cloud` concept, generated from
+  `schema/meta-signal-cloud.schema` and checked in as
+  `src/schema/meta_signal_cloud.rs`.
 
-**Sequence:** per `primary-kbmi.1`. Spirit is the MVP pilot landing first via `primary-ezqx.1`; cloud's schema cutover coordinates with cloud daemon implementation. The daemon currently sits at the design-and-skeleton stage (binds sockets, decodes frames, returns unsupported replies); schema cutover lands together with the first real provider-policy storage implementation rather than retrofitting later.
+`schema/cloud.concept.schema` is the operator-main alignment marker for the
+combined runtime shape. It names the Signal / Nexus / SEMA roots the runtime
+will implement when `main` absorbs the next contracts: ordinary observation and
+validation, owner-only policy and plan application, SEMA read/write command
+objects, and Cloudflare effect commands.
 
-**Per-component concerns:** Per `primary-kbmi.1`; schema cutover coordinates with cloud daemon implementation. The owner-signal-cloud contract is paired with the ordinary signal-cloud contract; both legs of the policy-vs-working split appear in the single `cloud.schema` file (owner-only operations vs ordinary operations) per the schema-language's separation discipline.
-
-**References:**
-- `reports/designer/326-v13-spirit-complete-schema-vision.md` — uniform header form + schema-language design
-- `reports/designer/324-migration-mvp-spirit-handover-re-specification.md` — migration MVP + handover state
-- `reports/designer/322-spirit-mvp-positional-schema-worked-example.md` — Spirit MVP worked example
-- `reports/operator/174-schema-import-header-design-critique-2026-05-24.md` — header/body/feature separation + lowering rules
+The integration boundary remains the daemon: the signal contract crates own the
+generated wire vocabulary; `cloud` owns the handwritten runtime actors, provider
+effects, policy state, plan state, credential-handle resolution, and future
+sema-engine persistence. Operator integrates from `next` by cherry-picking,
+re-implementing, rebasing, or merging the designer branch when the generated
+contract and runtime boundary are good enough.

@@ -1,38 +1,94 @@
+;; cloud.concept.schema — operator-main alignment marker for the schema-derived
+;; cloud triad. The current main runtime remains hand-written Rust over
+;; signal-frame contracts; the breaking generated-contract experiments live on
+;; signal-cloud:next and owner-signal-cloud:next. This concept file names the
+;; combined runtime shape that cloud-daemon will implement when main absorbs
+;; the next contracts.
+
 {}
 
-[
-  (Observe [Provider Capability Plan])
-  (Validate [DesiredState])
-]
+[Observe Validate]
 
-[
-  (Credential [Register Retire])
-  (Policy [ApprovePlan ApplyPlan])
-]
+[RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
 
-[]
+[SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
 
 {
-  Observe [(Provider Provider) (Capability Capability) (Plan Plan)]
-  Validate [(DesiredState DesiredState)]
-  Credential [(Register Register) (Retire Retire)]
-  Policy [(ApprovePlan ApprovePlan) (ApplyPlan ApplyPlan)]
-  Provider (Text)
-  Capability (Text)
-  Plan (Text)
-  DesiredState (Text)
-  Register (Text)
-  Retire (Text)
-  ApprovePlan (Text)
-  ApplyPlan (Text)
-  Text (String)
-  Identifier (u64)
-  Name (String)
-  Path (String)
-  Status [Concept Active Retired]
+  Observe Observation
+  Validate Validation
+  RegisterAccount Registration
+  RotateCredential Rotation
+  SetPolicy Policy
+  PreparePlan PlanPreparation
+  PrepareProjection ProjectionPreparation
+  ApprovePlan Approval
+  ApplyPlan Application
+  RetireAccount Retirement
+
+  NexusWork [SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
+  SignalArrived SignalInput
+  SemaReadCompleted SemaReadOutput
+  SemaWriteCompleted SemaWriteOutput
+  EffectCompleted NexusEffectResult
+
+  NexusAction [CommandSemaRead CommandSemaWrite CommandEffect ReplyToSignal Continue]
+  CommandSemaRead SemaReadInput
+  CommandSemaWrite SemaWriteInput
+  CommandEffect NexusEffectCommand
+  ReplyToSignal SignalOutput
+  Continue NexusWork
+
+  SemaReadInput [ObservePlan]
+  ObservePlan PlanIdentifier
+  SemaWriteInput [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
+  SemaReadOutput [PlanObserved Missed]
+  SemaWriteOutput [AccountRegistered CredentialRotated PolicySet PlanPrepared PlanApproved PlanApplied AccountRetired]
+
+  NexusEffectCommand [CloudflareObserveZones CloudflareObserveRecords CloudflareApplyPlan]
+  NexusEffectResult [ZonesObserved RecordsObserved CloudflareApplied]
+
+  Observation [Capabilities Zones Records Redirects ObservePlan]
+  Validation DesiredState
+  Registration { Provider * ProviderAccount * CredentialHandle * }
+  Rotation { Provider * ProviderAccount * CredentialHandle * }
+  Policy { zones (Vec ZonePolicy) capabilities (Vec CapabilityPolicy) }
+  PlanPreparation DesiredState
+  ProjectionPreparation Projection
+  Approval PlanIdentifier
+  Application PlanIdentifier
+  Retirement { Provider * ProviderAccount * }
+
+  SignalInput [OrdinarySignal MetaSignal]
+  OrdinarySignal [Observe Validate]
+  MetaSignal [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
+  SignalOutput [Observed Validated AccountRegistered CredentialRotated PolicySet PlanPrepared PlanApproved PlanApplied AccountRetired RequestUnsupported RequestRejected]
+
+  Provider [Cloudflare GoogleCloud Hetzner]
+  Capability [DomainNameSystemRecords RedirectRules CloudHosts Networks Firewalls LoadBalancers]
+  CapabilityDirective [Enable Disable]
+  ZonePolicy { Provider * ProviderAccount * allowed_zones (Vec DomainName) }
+  CapabilityPolicy { Provider * ProviderAccount * Capability * CapabilityDirective * }
+  DesiredState { Provider * zone DomainName records (Vec DomainNameSystemRecord) redirects (Vec RedirectRule) }
+  Projection { ProjectionQuery * records (Vec DomainNameSystemRecord) redirects (Vec RedirectRule) }
+  ProjectionQuery { domain DomainName ProjectionScope * }
+  ProjectionScope [PublicRecords AllRecords]
+  Plan { identifier PlanIdentifier Provider * zone DomainName records_to_create (Vec DomainNameSystemRecord) records_to_update (Vec DomainNameSystemRecord) record_names_to_delete (Vec DomainName) redirects_to_create (Vec RedirectRule) redirects_to_update (Vec RedirectRule) redirect_sources_to_delete (Vec DomainName) }
+  DomainNameSystemRecord { name DomainName kind RecordKind content RecordContent proxy ProxyMode }
+  RedirectRule { source DomainName target DomainName status RedirectStatus path PathTreatment }
+  RecordKind [AddressV4 AddressV6 CanonicalName Text MailExchange NameServer Pointer Service CertificateAuthorityAuthorization SecureShellFingerprint TransportLayerSecurityAuthentication UniformResourceIdentifier ServiceBinding HttpsBinding Location]
+  ProxyMode [Direct ProviderProxy]
+  RedirectStatus [Permanent Temporary]
+  PathTreatment [Preserve Replace]
+  RejectionReason [CredentialHandleUnknown ProviderNotConfigured AccountUnknown PlanUnknown PlanNotApproved PlanGenerationFailed CapabilityUnauthorized ProviderRateLimited ProviderUnavailable]
+
+  ProviderAccount String
+  CredentialHandle String
+  DomainName String
+  RecordContent String
+  PlanIdentifier String
+  CommitSequence Integer
+  StateDigest Integer
+  DatabaseMarker { CommitSequence * StateDigest * }
 }
 
-[
-  (Version 0 1)
-  (Status Concept)
-]
+[(Version 0 2) (Status MainAlignment) (NextContracts [signal-cloud owner-signal-cloud])]
