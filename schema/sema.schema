@@ -31,19 +31,19 @@
   ProviderAccount signal-cloud:lib:ProviderAccount
   CredentialHandle meta-signal-cloud:lib:CredentialHandle
 }
-[ReadInput WriteInput]
-[ReadOutput WriteOutput]
+[SemaReadInput SemaWriteInput]
+[SemaReadOutput SemaWriteOutput]
 {
-  ReadInput [Observe ObservePlan Validate]
+  SemaReadInput [Observe ObservePlan Validate]
   Observe Observation
   ObservePlan PlanQuery
   Validate Validation
 
-  ReadOutput [Observed Validated PlanObserved Missed]
+  SemaReadOutput [(Observed Observed) (Validated Validated) PlanObserved Missed]
   PlanObserved PlanResult
   Missed RejectionReport
 
-  WriteInput [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
+  SemaWriteInput [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
   RegisterAccount Registration
   RotateCredential Rotation
   SetPolicy Policy
@@ -53,7 +53,7 @@
   ApplyPlan Application
   RetireAccount Retirement
 
-  WriteOutput [AccountRegistered CredentialRotated PolicySet PlanPrepared PlanApproved PlanApplied AccountRetired RequestRejected]
+  SemaWriteOutput [(AccountRegistered AccountRegistered) (CredentialRotated CredentialRotated) (PolicySet PolicySet) (PlanPrepared PlanPrepared) (PlanApproved PlanApproved) (PlanApplied PlanApplied) (AccountRetired AccountRetired) (RequestRejected RequestRejected)]
 
   RejectionReport { reason RejectionReason marker StateMarker }
   RejectionReason [ProviderNotConfigured AccountUnknown PlanUnknown PlanNotApproved CapabilityUnauthorized ProviderRateLimited ProviderUnavailable]

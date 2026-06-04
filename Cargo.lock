@@ -421,7 +421,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "meta-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#aac64f068acc3c409af1b100052ea9e445491174"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#c5bd5a1fc7db6d50dd4d0e6efb139a9bf71270bd"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -817,7 +817,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#5c201e1ffc5e7b76bc29e9a562583ffc332a13e1"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#fc1a3a32a819069d1920d5efb3b8ff2442770e9a"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -828,10 +828,11 @@ dependencies = [
 [[package]]
 name = "signal-domain-criome"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-domain-criome.git?branch=main#a89e36f06994ca28ce512e1bc059ac60e7c189e2"
+source = "git+https://github.com/LiGoldragon/signal-domain-criome.git?branch=main#2e587cc877cbaa20c18a03866511eb0b6b8af477"
 dependencies = [
  "nota-codec",
  "rkyv",
+ "schema-rust-next",
  "signal-frame",
 ]
 

@@ -3,6 +3,8 @@
 //! The daemon owns provider policy and plan state. The CLI is only a
 //! text-to-Signal adapter for this daemon.
 
+extern crate self as cloud;
+
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -30,6 +32,8 @@ pub mod cloudflare;
 pub mod cloudflare_cli;
 pub mod daemon;
 pub mod frame_io;
+pub mod schema;
+pub mod schema_runtime;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

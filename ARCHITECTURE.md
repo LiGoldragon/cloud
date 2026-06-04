@@ -111,3 +111,10 @@ daemon runtime schemas: `schema/nexus.schema` targets `NexusRuntime`, and
 directory from Cargo metadata, then freshness-checks `schema/*.asschema` and
 `src/schema/{nexus,sema}.rs`. The daemon must not hard-code local checkout
 paths for contract schemas.
+
+`src/schema_runtime.rs` is the first fresh implementation slice over those
+generated planes. It implements the generated Nexus and SEMA engine traits for
+an in-memory runtime that can triage ordinary capability/validation requests,
+triage meta registration/policy requests, apply SEMA writes, observe SEMA reads,
+and turn SEMA completions back into Signal replies. Live Cloudflare IO and durable
+redb-backed state remain the next slices.

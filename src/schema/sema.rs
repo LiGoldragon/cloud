@@ -33,7 +33,7 @@ pub use signal_cloud::schema::lib::ProviderAccount as ProviderAccount;
 pub use meta_signal_cloud::schema::lib::CredentialHandle as CredentialHandle;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ReadInput {
+pub enum SemaReadInput {
     Observe(Observe),
     ObservePlan(ObservePlan),
     Validate(Validate),
@@ -46,9 +46,9 @@ pub type ObservePlan = PlanQuery;
 pub type Validate = Validation;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ReadOutput {
-    Observed,
-    Validated,
+pub enum SemaReadOutput {
+    Observed(Observed),
+    Validated(Validated),
     PlanObserved(PlanObserved),
     Missed(Missed),
 }
@@ -58,7 +58,7 @@ pub type PlanObserved = PlanResult;
 pub type Missed = RejectionReport;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum WriteInput {
+pub enum SemaWriteInput {
     RegisterAccount(RegisterAccount),
     RotateCredential(RotateCredential),
     SetPolicy(SetPolicy),
@@ -86,15 +86,15 @@ pub type ApplyPlan = Application;
 pub type RetireAccount = Retirement;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum WriteOutput {
-    AccountRegistered,
-    CredentialRotated,
-    PolicySet,
-    PlanPrepared,
-    PlanApproved,
-    PlanApplied,
-    AccountRetired,
-    RequestRejected,
+pub enum SemaWriteOutput {
+    AccountRegistered(AccountRegistered),
+    CredentialRotated(CredentialRotated),
+    PolicySet(PolicySet),
+    PlanPrepared(PlanPrepared),
+    PlanApproved(PlanApproved),
+    PlanApplied(PlanApplied),
+    AccountRetired(AccountRetired),
+    RequestRejected(RequestRejected),
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -146,14 +146,14 @@ pub struct StoredPlan {
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Input {
-    ReadInput(ReadInput),
-    WriteInput(WriteInput),
+    SemaReadInput(SemaReadInput),
+    SemaWriteInput(SemaWriteInput),
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Output {
-    ReadOutput(ReadOutput),
-    WriteOutput(WriteOutput),
+    SemaReadOutput(SemaReadOutput),
+    SemaWriteOutput(SemaWriteOutput),
 }
 
 impl AccountPolicyTable {
@@ -196,7 +196,7 @@ impl From<Vec<StoredPlan>> for PlanTable {
     }
 }
 
-impl ReadInput {
+impl SemaReadInput {
     pub fn observe(payload: Observe) -> Self {
         Self::Observe(payload)
     }
@@ -210,7 +210,15 @@ impl ReadInput {
     }
 }
 
-impl ReadOutput {
+impl SemaReadOutput {
+    pub fn observed(payload: Observed) -> Self {
+        Self::Observed(payload)
+    }
+
+    pub fn validated(payload: Validated) -> Self {
+        Self::Validated(payload)
+    }
+
     pub fn plan_observed(payload: PlanObserved) -> Self {
         Self::PlanObserved(payload)
     }
@@ -220,7 +228,7 @@ impl ReadOutput {
     }
 }
 
-impl WriteInput {
+impl SemaWriteInput {
     pub fn register_account(payload: RegisterAccount) -> Self {
         Self::RegisterAccount(payload)
     }
@@ -254,57 +262,151 @@ impl WriteInput {
     }
 }
 
-impl Input {
-    pub fn read_input(payload: ReadInput) -> Self {
-        Self::ReadInput(payload)
+impl SemaWriteOutput {
+    pub fn account_registered(payload: AccountRegistered) -> Self {
+        Self::AccountRegistered(payload)
     }
 
-    pub fn write_input(payload: WriteInput) -> Self {
-        Self::WriteInput(payload)
+    pub fn credential_rotated(payload: CredentialRotated) -> Self {
+        Self::CredentialRotated(payload)
+    }
+
+    pub fn policy_set(payload: PolicySet) -> Self {
+        Self::PolicySet(payload)
+    }
+
+    pub fn plan_prepared(payload: PlanPrepared) -> Self {
+        Self::PlanPrepared(payload)
+    }
+
+    pub fn plan_approved(payload: PlanApproved) -> Self {
+        Self::PlanApproved(payload)
+    }
+
+    pub fn plan_applied(payload: PlanApplied) -> Self {
+        Self::PlanApplied(payload)
+    }
+
+    pub fn account_retired(payload: AccountRetired) -> Self {
+        Self::AccountRetired(payload)
+    }
+
+    pub fn request_rejected(payload: RequestRejected) -> Self {
+        Self::RequestRejected(payload)
+    }
+}
+
+impl Input {
+    pub fn sema_read_input(payload: SemaReadInput) -> Self {
+        Self::SemaReadInput(payload)
+    }
+
+    pub fn sema_write_input(payload: SemaWriteInput) -> Self {
+        Self::SemaWriteInput(payload)
     }
 }
 
 impl Output {
-    pub fn read_output(payload: ReadOutput) -> Self {
-        Self::ReadOutput(payload)
+    pub fn sema_read_output(payload: SemaReadOutput) -> Self {
+        Self::SemaReadOutput(payload)
     }
 
-    pub fn write_output(payload: WriteOutput) -> Self {
-        Self::WriteOutput(payload)
-    }
-}
-
-impl From<ReadInput> for Input {
-    fn from(payload: ReadInput) -> Self {
-        Self::ReadInput(payload)
+    pub fn sema_write_output(payload: SemaWriteOutput) -> Self {
+        Self::SemaWriteOutput(payload)
     }
 }
 
-impl From<WriteInput> for Input {
-    fn from(payload: WriteInput) -> Self {
-        Self::WriteInput(payload)
+impl From<Observed> for SemaReadOutput {
+    fn from(payload: Observed) -> Self {
+        Self::Observed(payload)
     }
 }
 
-impl From<ReadOutput> for Output {
-    fn from(payload: ReadOutput) -> Self {
-        Self::ReadOutput(payload)
+impl From<Validated> for SemaReadOutput {
+    fn from(payload: Validated) -> Self {
+        Self::Validated(payload)
     }
 }
 
-impl From<WriteOutput> for Output {
-    fn from(payload: WriteOutput) -> Self {
-        Self::WriteOutput(payload)
+impl From<AccountRegistered> for SemaWriteOutput {
+    fn from(payload: AccountRegistered) -> Self {
+        Self::AccountRegistered(payload)
+    }
+}
+
+impl From<CredentialRotated> for SemaWriteOutput {
+    fn from(payload: CredentialRotated) -> Self {
+        Self::CredentialRotated(payload)
+    }
+}
+
+impl From<PolicySet> for SemaWriteOutput {
+    fn from(payload: PolicySet) -> Self {
+        Self::PolicySet(payload)
+    }
+}
+
+impl From<PlanPrepared> for SemaWriteOutput {
+    fn from(payload: PlanPrepared) -> Self {
+        Self::PlanPrepared(payload)
+    }
+}
+
+impl From<PlanApproved> for SemaWriteOutput {
+    fn from(payload: PlanApproved) -> Self {
+        Self::PlanApproved(payload)
+    }
+}
+
+impl From<PlanApplied> for SemaWriteOutput {
+    fn from(payload: PlanApplied) -> Self {
+        Self::PlanApplied(payload)
+    }
+}
+
+impl From<AccountRetired> for SemaWriteOutput {
+    fn from(payload: AccountRetired) -> Self {
+        Self::AccountRetired(payload)
+    }
+}
+
+impl From<RequestRejected> for SemaWriteOutput {
+    fn from(payload: RequestRejected) -> Self {
+        Self::RequestRejected(payload)
+    }
+}
+
+impl From<SemaReadInput> for Input {
+    fn from(payload: SemaReadInput) -> Self {
+        Self::SemaReadInput(payload)
+    }
+}
+
+impl From<SemaWriteInput> for Input {
+    fn from(payload: SemaWriteInput) -> Self {
+        Self::SemaWriteInput(payload)
+    }
+}
+
+impl From<SemaReadOutput> for Output {
+    fn from(payload: SemaReadOutput) -> Self {
+        Self::SemaReadOutput(payload)
+    }
+}
+
+impl From<SemaWriteOutput> for Output {
+    fn from(payload: SemaWriteOutput) -> Self {
+        Self::SemaWriteOutput(payload)
     }
 }
 
 
 
 pub mod short_header {
-    pub const INPUT_READ_INPUT: u64 = 0x0000000000000000;
-    pub const INPUT_WRITE_INPUT: u64 = 0x0001000000000000;
-    pub const OUTPUT_READ_OUTPUT: u64 = 0x0100000000000000;
-    pub const OUTPUT_WRITE_OUTPUT: u64 = 0x0101000000000000;
+    pub const INPUT_SEMA_READ_INPUT: u64 = 0x0000000000000000;
+    pub const INPUT_SEMA_WRITE_INPUT: u64 = 0x0001000000000000;
+    pub const OUTPUT_SEMA_READ_OUTPUT: u64 = 0x0100000000000000;
+    pub const OUTPUT_SEMA_WRITE_OUTPUT: u64 = 0x0101000000000000;
 }
 
 const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;
@@ -334,35 +436,35 @@ impl std::error::Error for SignalFrameError {}
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputRoute {
-    ReadInput,
-    WriteInput,
+    SemaReadInput,
+    SemaWriteInput,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputRoute {
-    ReadOutput,
-    WriteOutput,
+    SemaReadOutput,
+    SemaWriteOutput,
 }
 
 impl Input {
     pub fn route(&self) -> InputRoute {
         match self {
-            Self::ReadInput(_) => InputRoute::ReadInput,
-            Self::WriteInput(_) => InputRoute::WriteInput,
+            Self::SemaReadInput(_) => InputRoute::SemaReadInput,
+            Self::SemaWriteInput(_) => InputRoute::SemaWriteInput,
         }
     }
 
     pub fn short_header(&self) -> u64 {
         match self {
-            Self::ReadInput(_) => short_header::INPUT_READ_INPUT,
-            Self::WriteInput(_) => short_header::INPUT_WRITE_INPUT,
+            Self::SemaReadInput(_) => short_header::INPUT_SEMA_READ_INPUT,
+            Self::SemaWriteInput(_) => short_header::INPUT_SEMA_WRITE_INPUT,
         }
     }
 
     pub fn route_from_short_header(header: u64) -> Result<InputRoute, SignalFrameError> {
         match header {
-            short_header::INPUT_READ_INPUT => Ok(InputRoute::ReadInput),
-            short_header::INPUT_WRITE_INPUT => Ok(InputRoute::WriteInput),
+            short_header::INPUT_SEMA_READ_INPUT => Ok(InputRoute::SemaReadInput),
+            short_header::INPUT_SEMA_WRITE_INPUT => Ok(InputRoute::SemaWriteInput),
             _ => Err(SignalFrameError::UnknownHeader { root_enum: "Input", header }),
         }
     }
@@ -397,22 +499,22 @@ impl Input {
 impl Output {
     pub fn route(&self) -> OutputRoute {
         match self {
-            Self::ReadOutput(_) => OutputRoute::ReadOutput,
-            Self::WriteOutput(_) => OutputRoute::WriteOutput,
+            Self::SemaReadOutput(_) => OutputRoute::SemaReadOutput,
+            Self::SemaWriteOutput(_) => OutputRoute::SemaWriteOutput,
         }
     }
 
     pub fn short_header(&self) -> u64 {
         match self {
-            Self::ReadOutput(_) => short_header::OUTPUT_READ_OUTPUT,
-            Self::WriteOutput(_) => short_header::OUTPUT_WRITE_OUTPUT,
+            Self::SemaReadOutput(_) => short_header::OUTPUT_SEMA_READ_OUTPUT,
+            Self::SemaWriteOutput(_) => short_header::OUTPUT_SEMA_WRITE_OUTPUT,
         }
     }
 
     pub fn route_from_short_header(header: u64) -> Result<OutputRoute, SignalFrameError> {
         match header {
-            short_header::OUTPUT_READ_OUTPUT => Ok(OutputRoute::ReadOutput),
-            short_header::OUTPUT_WRITE_OUTPUT => Ok(OutputRoute::WriteOutput),
+            short_header::OUTPUT_SEMA_READ_OUTPUT => Ok(OutputRoute::SemaReadOutput),
+            short_header::OUTPUT_SEMA_WRITE_OUTPUT => Ok(OutputRoute::SemaWriteOutput),
             _ => Err(SignalFrameError::UnknownHeader { root_enum: "Output", header }),
         }
     }
@@ -445,6 +547,180 @@ impl Output {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemaReadInputRoute {
+    Observe,
+    ObservePlan,
+    Validate,
+}
+
+impl SemaReadInput {
+    pub fn route(&self) -> SemaReadInputRoute {
+        match self {
+            Self::Observe(_) => SemaReadInputRoute::Observe,
+            Self::ObservePlan(_) => SemaReadInputRoute::ObservePlan,
+            Self::Validate(_) => SemaReadInputRoute::Validate,
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemaReadOutputRoute {
+    Observed,
+    Validated,
+    PlanObserved,
+    Missed,
+}
+
+impl SemaReadOutput {
+    pub fn route(&self) -> SemaReadOutputRoute {
+        match self {
+            Self::Observed(_) => SemaReadOutputRoute::Observed,
+            Self::Validated(_) => SemaReadOutputRoute::Validated,
+            Self::PlanObserved(_) => SemaReadOutputRoute::PlanObserved,
+            Self::Missed(_) => SemaReadOutputRoute::Missed,
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemaWriteInputRoute {
+    RegisterAccount,
+    RotateCredential,
+    SetPolicy,
+    PreparePlan,
+    PrepareProjection,
+    ApprovePlan,
+    ApplyPlan,
+    RetireAccount,
+}
+
+impl SemaWriteInput {
+    pub fn route(&self) -> SemaWriteInputRoute {
+        match self {
+            Self::RegisterAccount(_) => SemaWriteInputRoute::RegisterAccount,
+            Self::RotateCredential(_) => SemaWriteInputRoute::RotateCredential,
+            Self::SetPolicy(_) => SemaWriteInputRoute::SetPolicy,
+            Self::PreparePlan(_) => SemaWriteInputRoute::PreparePlan,
+            Self::PrepareProjection(_) => SemaWriteInputRoute::PrepareProjection,
+            Self::ApprovePlan(_) => SemaWriteInputRoute::ApprovePlan,
+            Self::ApplyPlan(_) => SemaWriteInputRoute::ApplyPlan,
+            Self::RetireAccount(_) => SemaWriteInputRoute::RetireAccount,
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemaWriteOutputRoute {
+    AccountRegistered,
+    CredentialRotated,
+    PolicySet,
+    PlanPrepared,
+    PlanApproved,
+    PlanApplied,
+    AccountRetired,
+    RequestRejected,
+}
+
+impl SemaWriteOutput {
+    pub fn route(&self) -> SemaWriteOutputRoute {
+        match self {
+            Self::AccountRegistered(_) => SemaWriteOutputRoute::AccountRegistered,
+            Self::CredentialRotated(_) => SemaWriteOutputRoute::CredentialRotated,
+            Self::PolicySet(_) => SemaWriteOutputRoute::PolicySet,
+            Self::PlanPrepared(_) => SemaWriteOutputRoute::PlanPrepared,
+            Self::PlanApproved(_) => SemaWriteOutputRoute::PlanApproved,
+            Self::PlanApplied(_) => SemaWriteOutputRoute::PlanApplied,
+            Self::AccountRetired(_) => SemaWriteOutputRoute::AccountRetired,
+            Self::RequestRejected(_) => SemaWriteOutputRoute::RequestRejected,
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemaObjectName {
+    WriteInput(SemaWriteInputRoute),
+    ReadInput(SemaReadInputRoute),
+    WriteOutput(SemaWriteOutputRoute),
+    ReadOutput(SemaReadOutputRoute),
+    Started,
+    Stopped,
+    WriteApplied,
+    ReadObserved,
+}
+
+impl SemaObjectName {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::WriteInput(route) => match route {
+                SemaWriteInputRoute::RegisterAccount => "SemaWriteInputRegisterAccount",
+                SemaWriteInputRoute::RotateCredential => "SemaWriteInputRotateCredential",
+                SemaWriteInputRoute::SetPolicy => "SemaWriteInputSetPolicy",
+                SemaWriteInputRoute::PreparePlan => "SemaWriteInputPreparePlan",
+                SemaWriteInputRoute::PrepareProjection => "SemaWriteInputPrepareProjection",
+                SemaWriteInputRoute::ApprovePlan => "SemaWriteInputApprovePlan",
+                SemaWriteInputRoute::ApplyPlan => "SemaWriteInputApplyPlan",
+                SemaWriteInputRoute::RetireAccount => "SemaWriteInputRetireAccount",
+            },
+            Self::ReadInput(route) => match route {
+                SemaReadInputRoute::Observe => "SemaReadInputObserve",
+                SemaReadInputRoute::ObservePlan => "SemaReadInputObservePlan",
+                SemaReadInputRoute::Validate => "SemaReadInputValidate",
+            },
+            Self::WriteOutput(route) => match route {
+                SemaWriteOutputRoute::AccountRegistered => "SemaWriteOutputAccountRegistered",
+                SemaWriteOutputRoute::CredentialRotated => "SemaWriteOutputCredentialRotated",
+                SemaWriteOutputRoute::PolicySet => "SemaWriteOutputPolicySet",
+                SemaWriteOutputRoute::PlanPrepared => "SemaWriteOutputPlanPrepared",
+                SemaWriteOutputRoute::PlanApproved => "SemaWriteOutputPlanApproved",
+                SemaWriteOutputRoute::PlanApplied => "SemaWriteOutputPlanApplied",
+                SemaWriteOutputRoute::AccountRetired => "SemaWriteOutputAccountRetired",
+                SemaWriteOutputRoute::RequestRejected => "SemaWriteOutputRequestRejected",
+            },
+            Self::ReadOutput(route) => match route {
+                SemaReadOutputRoute::Observed => "SemaReadOutputObserved",
+                SemaReadOutputRoute::Validated => "SemaReadOutputValidated",
+                SemaReadOutputRoute::PlanObserved => "SemaReadOutputPlanObserved",
+                SemaReadOutputRoute::Missed => "SemaReadOutputMissed",
+            },
+            Self::Started => "SemaStarted",
+            Self::Stopped => "SemaStopped",
+            Self::WriteApplied => "SemaWriteApplied",
+            Self::ReadObserved => "SemaReadObserved",
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectName {
+    Sema(SemaObjectName),
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TraceEvent(pub ObjectName);
+
+impl ObjectName {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Sema(object_name) => object_name.name(),
+        }
+    }
+}
+
+impl TraceEvent {
+    pub fn new(object_name: ObjectName) -> Self {
+        Self(object_name)
+    }
+
+    pub fn object_name(&self) -> ObjectName {
+        self.0
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.0.name()
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OriginRoute(pub Integer);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -472,6 +748,104 @@ impl<Root> Sema<Root> {
 
     pub fn map_root<NextRoot>(self, map: impl FnOnce(Root) -> NextRoot) -> Sema<NextRoot> {
         Sema::new(self.origin_route, map(self.root))
+    }
+}
+
+pub mod sema {
+    pub type WriteInput = super::SemaWriteInput;
+    pub type WriteOutput = super::SemaWriteOutput;
+    pub type ReadInput = super::SemaReadInput;
+    pub type ReadOutput = super::SemaReadOutput;
+    pub type Sema<Root> = super::Sema<Root>;
+}
+
+impl SemaWriteInput {
+    pub fn with_origin_route(self, origin_route: OriginRoute) -> sema::Sema<Self> {
+        sema::Sema::new(origin_route, self)
+    }
+}
+
+impl SemaWriteOutput {
+    pub fn with_origin_route(self, origin_route: OriginRoute) -> sema::Sema<Self> {
+        sema::Sema::new(origin_route, self)
+    }
+}
+
+impl SemaReadInput {
+    pub fn with_origin_route(self, origin_route: OriginRoute) -> sema::Sema<Self> {
+        sema::Sema::new(origin_route, self)
+    }
+}
+
+impl SemaReadOutput {
+    pub fn with_origin_route(self, origin_route: OriginRoute) -> sema::Sema<Self> {
+        sema::Sema::new(origin_route, self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActorStartFailure {
+    ResourceBusy(String),
+    ConfigurationInvalid(String),
+}
+
+impl std::fmt::Display for ActorStartFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ResourceBusy(message) => write!(formatter, "actor resource busy: {message}"),
+            Self::ConfigurationInvalid(message) => write!(formatter, "actor configuration invalid: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ActorStartFailure {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActorStopFailure {
+    ResourceLocked(String),
+    ChildStillRunning(String),
+}
+
+impl std::fmt::Display for ActorStopFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ResourceLocked(message) => write!(formatter, "actor resource locked: {message}"),
+            Self::ChildStillRunning(message) => write!(formatter, "actor child still running: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ActorStopFailure {}
+
+pub trait SemaEngine {
+    fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+        Ok(())
+    }
+    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+        Ok(())
+    }
+
+    fn trace_sema_activation(&self, _object_name: SemaObjectName) {}
+    fn trace_sema_write_applied(&self) {
+        self.trace_sema_activation(SemaObjectName::WriteApplied);
+    }
+    fn trace_sema_read_observed(&self) {
+        self.trace_sema_activation(SemaObjectName::ReadObserved);
+    }
+
+    fn apply_inner(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput>;
+    fn observe_inner(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput>;
+
+    fn apply(&mut self, input: sema::Sema<sema::WriteInput>) -> sema::Sema<sema::WriteOutput> {
+        let output = self.apply_inner(input);
+        self.trace_sema_write_applied();
+        output
+    }
+
+    fn observe(&self, input: sema::Sema<sema::ReadInput>) -> sema::Sema<sema::ReadOutput> {
+        let output = self.observe_inner(input);
+        self.trace_sema_read_observed();
+        output
     }
 }
 

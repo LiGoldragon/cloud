@@ -9,10 +9,10 @@ pub use signal_cloud::schema::lib::Input as OrdinaryInput;
 pub use signal_cloud::schema::lib::Output as OrdinaryOutput;
 pub use meta_signal_cloud::schema::lib::Input as MetaInput;
 pub use meta_signal_cloud::schema::lib::Output as MetaOutput;
-pub use cloud::schema::sema::ReadInput as SemaReadInput;
-pub use cloud::schema::sema::ReadOutput as SemaReadOutput;
-pub use cloud::schema::sema::WriteInput as SemaWriteInput;
-pub use cloud::schema::sema::WriteOutput as SemaWriteOutput;
+pub use cloud::schema::sema::SemaReadInput as SemaReadInput;
+pub use cloud::schema::sema::SemaReadOutput as SemaReadOutput;
+pub use cloud::schema::sema::SemaWriteInput as SemaWriteInput;
+pub use cloud::schema::sema::SemaWriteOutput as SemaWriteOutput;
 pub use signal_cloud::schema::lib::ZoneQuery as ZoneQuery;
 pub use signal_cloud::schema::lib::RecordQuery as RecordQuery;
 pub use signal_cloud::schema::lib::ZoneListing as ZoneListing;
@@ -36,18 +36,18 @@ pub type CommandEffect = EffectCommand;
 
 pub type ReplyToSignal = SignalOutput;
 
-pub type Continue = NexusInput;
+pub type Continue = NexusWork;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SignalInput {
-    OrdinaryInput,
-    MetaInput,
+    OrdinaryInput(OrdinaryInput),
+    MetaInput(MetaInput),
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SignalOutput {
-    OrdinaryOutput,
-    MetaOutput,
+    OrdinaryOutput(OrdinaryOutput),
+    MetaOutput(MetaOutput),
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -67,7 +67,7 @@ pub type CloudflareApplyPlan = PlanIdentifier;
 pub enum EffectResult {
     ZonesObserved(ZonesObserved),
     RecordsObserved(RecordsObserved),
-    PlanApplied,
+    PlanApplied(PlanApplied),
 }
 
 pub type ZonesObserved = ZoneListing;
@@ -75,7 +75,7 @@ pub type ZonesObserved = ZoneListing;
 pub type RecordsObserved = RecordListing;
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum NexusInput {
+pub enum NexusWork {
     SignalArrived(SignalArrived),
     SemaReadCompleted(SemaReadCompleted),
     SemaWriteCompleted(SemaWriteCompleted),
@@ -83,7 +83,7 @@ pub enum NexusInput {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum NexusOutput {
+pub enum NexusAction {
     CommandSemaRead(CommandSemaRead),
     CommandSemaWrite(CommandSemaWrite),
     CommandEffect(CommandEffect),
@@ -93,19 +93,32 @@ pub enum NexusOutput {
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Input {
-    SignalArrived(SignalArrived),
-    SemaReadCompleted(SemaReadCompleted),
-    SemaWriteCompleted(SemaWriteCompleted),
-    EffectCompleted(EffectCompleted),
+    NexusWork(NexusWork),
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Output {
-    CommandSemaRead(CommandSemaRead),
-    CommandSemaWrite(CommandSemaWrite),
-    CommandEffect(CommandEffect),
-    ReplyToSignal(ReplyToSignal),
-    Continue(Continue),
+    NexusAction(NexusAction),
+}
+
+impl SignalInput {
+    pub fn ordinary_input(payload: OrdinaryInput) -> Self {
+        Self::OrdinaryInput(payload)
+    }
+
+    pub fn meta_input(payload: MetaInput) -> Self {
+        Self::MetaInput(payload)
+    }
+}
+
+impl SignalOutput {
+    pub fn ordinary_output(payload: OrdinaryOutput) -> Self {
+        Self::OrdinaryOutput(payload)
+    }
+
+    pub fn meta_output(payload: MetaOutput) -> Self {
+        Self::MetaOutput(payload)
+    }
 }
 
 impl EffectCommand {
@@ -130,9 +143,13 @@ impl EffectResult {
     pub fn records_observed(payload: RecordsObserved) -> Self {
         Self::RecordsObserved(payload)
     }
+
+    pub fn plan_applied(payload: PlanApplied) -> Self {
+        Self::PlanApplied(payload)
+    }
 }
 
-impl NexusInput {
+impl NexusWork {
     pub fn signal_arrived(payload: SignalArrived) -> Self {
         Self::SignalArrived(payload)
     }
@@ -150,7 +167,7 @@ impl NexusInput {
     }
 }
 
-impl NexusOutput {
+impl NexusAction {
     pub fn command_sema_read(payload: CommandSemaRead) -> Self {
         Self::CommandSemaRead(payload)
     }
@@ -173,57 +190,64 @@ impl NexusOutput {
 }
 
 impl Input {
-    pub fn signal_arrived(payload: SignalArrived) -> Self {
-        Self::SignalArrived(payload)
-    }
-
-    pub fn sema_read_completed(payload: SemaReadCompleted) -> Self {
-        Self::SemaReadCompleted(payload)
-    }
-
-    pub fn sema_write_completed(payload: SemaWriteCompleted) -> Self {
-        Self::SemaWriteCompleted(payload)
-    }
-
-    pub fn effect_completed(payload: EffectCompleted) -> Self {
-        Self::EffectCompleted(payload)
+    pub fn nexus_work(payload: NexusWork) -> Self {
+        Self::NexusWork(payload)
     }
 }
 
 impl Output {
-    pub fn command_sema_read(payload: CommandSemaRead) -> Self {
-        Self::CommandSemaRead(payload)
+    pub fn nexus_action(payload: NexusAction) -> Self {
+        Self::NexusAction(payload)
     }
+}
 
-    pub fn command_sema_write(payload: CommandSemaWrite) -> Self {
-        Self::CommandSemaWrite(payload)
+impl From<OrdinaryInput> for SignalInput {
+    fn from(payload: OrdinaryInput) -> Self {
+        Self::OrdinaryInput(payload)
     }
+}
 
-    pub fn command_effect(payload: CommandEffect) -> Self {
-        Self::CommandEffect(payload)
+impl From<MetaInput> for SignalInput {
+    fn from(payload: MetaInput) -> Self {
+        Self::MetaInput(payload)
     }
+}
 
-    pub fn reply_to_signal(payload: ReplyToSignal) -> Self {
-        Self::ReplyToSignal(payload)
+impl From<OrdinaryOutput> for SignalOutput {
+    fn from(payload: OrdinaryOutput) -> Self {
+        Self::OrdinaryOutput(payload)
     }
+}
 
-    pub fn r#continue(payload: Continue) -> Self {
-        Self::Continue(payload)
+impl From<MetaOutput> for SignalOutput {
+    fn from(payload: MetaOutput) -> Self {
+        Self::MetaOutput(payload)
+    }
+}
+
+impl From<PlanApplied> for EffectResult {
+    fn from(payload: PlanApplied) -> Self {
+        Self::PlanApplied(payload)
+    }
+}
+
+impl From<NexusWork> for Input {
+    fn from(payload: NexusWork) -> Self {
+        Self::NexusWork(payload)
+    }
+}
+
+impl From<NexusAction> for Output {
+    fn from(payload: NexusAction) -> Self {
+        Self::NexusAction(payload)
     }
 }
 
 
 
 pub mod short_header {
-    pub const INPUT_SIGNAL_ARRIVED: u64 = 0x0000000000000000;
-    pub const INPUT_SEMA_READ_COMPLETED: u64 = 0x0001000000000000;
-    pub const INPUT_SEMA_WRITE_COMPLETED: u64 = 0x0002000000000000;
-    pub const INPUT_EFFECT_COMPLETED: u64 = 0x0003000000000000;
-    pub const OUTPUT_COMMAND_SEMA_READ: u64 = 0x0100000000000000;
-    pub const OUTPUT_COMMAND_SEMA_WRITE: u64 = 0x0101000000000000;
-    pub const OUTPUT_COMMAND_EFFECT: u64 = 0x0102000000000000;
-    pub const OUTPUT_REPLY_TO_SIGNAL: u64 = 0x0103000000000000;
-    pub const OUTPUT_CONTINUE: u64 = 0x0104000000000000;
+    pub const INPUT_NEXUS_WORK: u64 = 0x0000000000000000;
+    pub const OUTPUT_NEXUS_ACTION: u64 = 0x0100000000000000;
 }
 
 const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;
@@ -253,46 +277,30 @@ impl std::error::Error for SignalFrameError {}
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputRoute {
-    SignalArrived,
-    SemaReadCompleted,
-    SemaWriteCompleted,
-    EffectCompleted,
+    NexusWork,
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputRoute {
-    CommandSemaRead,
-    CommandSemaWrite,
-    CommandEffect,
-    ReplyToSignal,
-    Continue,
+    NexusAction,
 }
 
 impl Input {
     pub fn route(&self) -> InputRoute {
         match self {
-            Self::SignalArrived(_) => InputRoute::SignalArrived,
-            Self::SemaReadCompleted(_) => InputRoute::SemaReadCompleted,
-            Self::SemaWriteCompleted(_) => InputRoute::SemaWriteCompleted,
-            Self::EffectCompleted(_) => InputRoute::EffectCompleted,
+            Self::NexusWork(_) => InputRoute::NexusWork,
         }
     }
 
     pub fn short_header(&self) -> u64 {
         match self {
-            Self::SignalArrived(_) => short_header::INPUT_SIGNAL_ARRIVED,
-            Self::SemaReadCompleted(_) => short_header::INPUT_SEMA_READ_COMPLETED,
-            Self::SemaWriteCompleted(_) => short_header::INPUT_SEMA_WRITE_COMPLETED,
-            Self::EffectCompleted(_) => short_header::INPUT_EFFECT_COMPLETED,
+            Self::NexusWork(_) => short_header::INPUT_NEXUS_WORK,
         }
     }
 
     pub fn route_from_short_header(header: u64) -> Result<InputRoute, SignalFrameError> {
         match header {
-            short_header::INPUT_SIGNAL_ARRIVED => Ok(InputRoute::SignalArrived),
-            short_header::INPUT_SEMA_READ_COMPLETED => Ok(InputRoute::SemaReadCompleted),
-            short_header::INPUT_SEMA_WRITE_COMPLETED => Ok(InputRoute::SemaWriteCompleted),
-            short_header::INPUT_EFFECT_COMPLETED => Ok(InputRoute::EffectCompleted),
+            short_header::INPUT_NEXUS_WORK => Ok(InputRoute::NexusWork),
             _ => Err(SignalFrameError::UnknownHeader { root_enum: "Input", header }),
         }
     }
@@ -327,31 +335,19 @@ impl Input {
 impl Output {
     pub fn route(&self) -> OutputRoute {
         match self {
-            Self::CommandSemaRead(_) => OutputRoute::CommandSemaRead,
-            Self::CommandSemaWrite(_) => OutputRoute::CommandSemaWrite,
-            Self::CommandEffect(_) => OutputRoute::CommandEffect,
-            Self::ReplyToSignal(_) => OutputRoute::ReplyToSignal,
-            Self::Continue(_) => OutputRoute::Continue,
+            Self::NexusAction(_) => OutputRoute::NexusAction,
         }
     }
 
     pub fn short_header(&self) -> u64 {
         match self {
-            Self::CommandSemaRead(_) => short_header::OUTPUT_COMMAND_SEMA_READ,
-            Self::CommandSemaWrite(_) => short_header::OUTPUT_COMMAND_SEMA_WRITE,
-            Self::CommandEffect(_) => short_header::OUTPUT_COMMAND_EFFECT,
-            Self::ReplyToSignal(_) => short_header::OUTPUT_REPLY_TO_SIGNAL,
-            Self::Continue(_) => short_header::OUTPUT_CONTINUE,
+            Self::NexusAction(_) => short_header::OUTPUT_NEXUS_ACTION,
         }
     }
 
     pub fn route_from_short_header(header: u64) -> Result<OutputRoute, SignalFrameError> {
         match header {
-            short_header::OUTPUT_COMMAND_SEMA_READ => Ok(OutputRoute::CommandSemaRead),
-            short_header::OUTPUT_COMMAND_SEMA_WRITE => Ok(OutputRoute::CommandSemaWrite),
-            short_header::OUTPUT_COMMAND_EFFECT => Ok(OutputRoute::CommandEffect),
-            short_header::OUTPUT_REPLY_TO_SIGNAL => Ok(OutputRoute::ReplyToSignal),
-            short_header::OUTPUT_CONTINUE => Ok(OutputRoute::Continue),
+            short_header::OUTPUT_NEXUS_ACTION => Ok(OutputRoute::NexusAction),
             _ => Err(SignalFrameError::UnknownHeader { root_enum: "Output", header }),
         }
     }
@@ -384,6 +380,110 @@ impl Output {
 }
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NexusWorkRoute {
+    SignalArrived,
+    SemaReadCompleted,
+    SemaWriteCompleted,
+    EffectCompleted,
+}
+
+impl NexusWork {
+    pub fn route(&self) -> NexusWorkRoute {
+        match self {
+            Self::SignalArrived(_) => NexusWorkRoute::SignalArrived,
+            Self::SemaReadCompleted(_) => NexusWorkRoute::SemaReadCompleted,
+            Self::SemaWriteCompleted(_) => NexusWorkRoute::SemaWriteCompleted,
+            Self::EffectCompleted(_) => NexusWorkRoute::EffectCompleted,
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NexusActionRoute {
+    CommandSemaRead,
+    CommandSemaWrite,
+    CommandEffect,
+    ReplyToSignal,
+    Continue,
+}
+
+impl NexusAction {
+    pub fn route(&self) -> NexusActionRoute {
+        match self {
+            Self::CommandSemaRead(_) => NexusActionRoute::CommandSemaRead,
+            Self::CommandSemaWrite(_) => NexusActionRoute::CommandSemaWrite,
+            Self::CommandEffect(_) => NexusActionRoute::CommandEffect,
+            Self::ReplyToSignal(_) => NexusActionRoute::ReplyToSignal,
+            Self::Continue(_) => NexusActionRoute::Continue,
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NexusObjectName {
+    Work(NexusWorkRoute),
+    Action(NexusActionRoute),
+    Started,
+    Stopped,
+    Entered,
+    Decided,
+}
+
+impl NexusObjectName {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Work(route) => match route {
+                NexusWorkRoute::SignalArrived => "NexusWorkSignalArrived",
+                NexusWorkRoute::SemaReadCompleted => "NexusWorkSemaReadCompleted",
+                NexusWorkRoute::SemaWriteCompleted => "NexusWorkSemaWriteCompleted",
+                NexusWorkRoute::EffectCompleted => "NexusWorkEffectCompleted",
+            },
+            Self::Action(route) => match route {
+                NexusActionRoute::CommandSemaRead => "NexusActionCommandSemaRead",
+                NexusActionRoute::CommandSemaWrite => "NexusActionCommandSemaWrite",
+                NexusActionRoute::CommandEffect => "NexusActionCommandEffect",
+                NexusActionRoute::ReplyToSignal => "NexusActionReplyToSignal",
+                NexusActionRoute::Continue => "NexusActionContinue",
+            },
+            Self::Started => "NexusStarted",
+            Self::Stopped => "NexusStopped",
+            Self::Entered => "NexusEntered",
+            Self::Decided => "NexusDecided",
+        }
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectName {
+    Nexus(NexusObjectName),
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TraceEvent(pub ObjectName);
+
+impl ObjectName {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Nexus(object_name) => object_name.name(),
+        }
+    }
+}
+
+impl TraceEvent {
+    pub fn new(object_name: ObjectName) -> Self {
+        Self(object_name)
+    }
+
+    pub fn object_name(&self) -> ObjectName {
+        self.0
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.0.name()
+    }
+}
+
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OriginRoute(pub Integer);
 
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -411,6 +511,84 @@ impl<Root> Nexus<Root> {
 
     pub fn map_root<NextRoot>(self, map: impl FnOnce(Root) -> NextRoot) -> Nexus<NextRoot> {
         Nexus::new(self.origin_route, map(self.root))
+    }
+}
+
+pub mod nexus {
+    pub type Work = super::NexusWork;
+    pub type Action = super::NexusAction;
+    pub type Nexus<Root> = super::Nexus<Root>;
+}
+
+impl NexusWork {
+    pub fn with_origin_route(self, origin_route: OriginRoute) -> nexus::Nexus<Self> {
+        nexus::Nexus::new(origin_route, self)
+    }
+}
+
+impl NexusAction {
+    pub fn with_origin_route(self, origin_route: OriginRoute) -> nexus::Nexus<Self> {
+        nexus::Nexus::new(origin_route, self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActorStartFailure {
+    ResourceBusy(String),
+    ConfigurationInvalid(String),
+}
+
+impl std::fmt::Display for ActorStartFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ResourceBusy(message) => write!(formatter, "actor resource busy: {message}"),
+            Self::ConfigurationInvalid(message) => write!(formatter, "actor configuration invalid: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ActorStartFailure {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActorStopFailure {
+    ResourceLocked(String),
+    ChildStillRunning(String),
+}
+
+impl std::fmt::Display for ActorStopFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ResourceLocked(message) => write!(formatter, "actor resource locked: {message}"),
+            Self::ChildStillRunning(message) => write!(formatter, "actor child still running: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ActorStopFailure {}
+
+pub trait NexusEngine {
+    fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+        Ok(())
+    }
+    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+        Ok(())
+    }
+
+    fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}
+    fn trace_nexus_entered(&self) {
+        self.trace_nexus_activation(NexusObjectName::Entered);
+    }
+    fn trace_nexus_decided(&self) {
+        self.trace_nexus_activation(NexusObjectName::Decided);
+    }
+
+    fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;
+
+    fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action> {
+        self.trace_nexus_entered();
+        let output = self.decide(input);
+        self.trace_nexus_decided();
+        output
     }
 }
 

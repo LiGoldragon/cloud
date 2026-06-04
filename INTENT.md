@@ -8,6 +8,8 @@ Spirit records; not embellished.*
 - `cloud` upgrades toward the schema-interface and triad-engine approach while
   `main` remains the operator-owned integration path and `next` carries breaking
   contract work.
+- The current implementation should be written fresh from the desired cloud
+  component shape, not treated as constrained by the earlier prototype.
 - The cloud runtime owns provider execution: policy state, plan state,
   credential-handle resolution, provider effects, and future SEMA persistence.
 
