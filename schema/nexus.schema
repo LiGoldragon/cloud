@@ -1,0 +1,51 @@
+;; cloud Nexus plane schema — daemon-owned.
+;;
+;; Runtime implementation schema, not a Signal contract. It imports the
+;; ordinary/meta Signal roots and the local SEMA roots, then names the cloud
+;; daemon's decision/effect language.
+
+{
+  OrdinaryInput signal-cloud:lib:Input
+  OrdinaryOutput signal-cloud:lib:Output
+  MetaInput meta-signal-cloud:meta-signal-cloud:Input
+  MetaOutput meta-signal-cloud:meta-signal-cloud:Output
+  SemaReadInput cloud:sema:ReadInput
+  SemaReadOutput cloud:sema:ReadOutput
+  SemaWriteInput cloud:sema:WriteInput
+  SemaWriteOutput cloud:sema:WriteOutput
+  ZoneQuery signal-cloud:lib:ZoneQuery
+  RecordQuery signal-cloud:lib:RecordQuery
+  ZoneListing signal-cloud:lib:ZoneListing
+  RecordListing signal-cloud:lib:RecordListing
+  PlanIdentifier meta-signal-cloud:meta-signal-cloud:PlanIdentifier
+  PlanApplied meta-signal-cloud:meta-signal-cloud:PlanApplied
+}
+[SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
+[CommandSemaRead CommandSemaWrite CommandEffect ReplyToSignal Continue]
+{
+  SignalArrived SignalInput
+  SemaReadCompleted SemaReadOutput
+  SemaWriteCompleted SemaWriteOutput
+  EffectCompleted EffectResult
+
+  CommandSemaRead SemaReadInput
+  CommandSemaWrite SemaWriteInput
+  CommandEffect EffectCommand
+  ReplyToSignal SignalOutput
+  Continue NexusInput
+
+  SignalInput [OrdinaryInput MetaInput]
+  SignalOutput [OrdinaryOutput MetaOutput]
+
+  EffectCommand [CloudflareObserveZones CloudflareObserveRecords CloudflareApplyPlan]
+  CloudflareObserveZones ZoneQuery
+  CloudflareObserveRecords RecordQuery
+  CloudflareApplyPlan PlanIdentifier
+  EffectResult [ZonesObserved RecordsObserved PlanApplied]
+  ZonesObserved ZoneListing
+  RecordsObserved RecordListing
+
+  NexusInput [SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
+  NexusOutput [CommandSemaRead CommandSemaWrite CommandEffect ReplyToSignal Continue]
+}
+

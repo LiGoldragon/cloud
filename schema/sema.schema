@@ -1,0 +1,69 @@
+;; cloud SEMA plane schema — daemon-owned.
+;;
+;; Runtime implementation schema, not a Signal contract. It names cloud daemon
+;; durable state reads, writes, and table identity.
+
+{
+  Observation signal-cloud:lib:Observation
+  PlanQuery signal-cloud:lib:PlanQuery
+  Validation signal-cloud:lib:Validation
+  Observed signal-cloud:lib:Observed
+  Validated signal-cloud:lib:Validated
+  PlanResult signal-cloud:lib:PlanResult
+  Registration meta-signal-cloud:meta-signal-cloud:Registration
+  Rotation meta-signal-cloud:meta-signal-cloud:Rotation
+  Policy meta-signal-cloud:meta-signal-cloud:Policy
+  PlanPreparation meta-signal-cloud:meta-signal-cloud:PlanPreparation
+  ProjectionPreparation meta-signal-cloud:meta-signal-cloud:ProjectionPreparation
+  Approval meta-signal-cloud:meta-signal-cloud:Approval
+  Application meta-signal-cloud:meta-signal-cloud:Application
+  Retirement meta-signal-cloud:meta-signal-cloud:Retirement
+  AccountRegistered meta-signal-cloud:meta-signal-cloud:AccountRegistered
+  CredentialRotated meta-signal-cloud:meta-signal-cloud:CredentialRotated
+  PolicySet meta-signal-cloud:meta-signal-cloud:PolicySet
+  PlanPrepared meta-signal-cloud:meta-signal-cloud:PlanPrepared
+  PlanApproved meta-signal-cloud:meta-signal-cloud:PlanApproved
+  PlanApplied meta-signal-cloud:meta-signal-cloud:PlanApplied
+  AccountRetired meta-signal-cloud:meta-signal-cloud:AccountRetired
+  RequestRejected meta-signal-cloud:meta-signal-cloud:RequestRejected
+  Plan meta-signal-cloud:meta-signal-cloud:Plan
+  Provider signal-cloud:lib:Provider
+  ProviderAccount signal-cloud:lib:ProviderAccount
+  CredentialHandle meta-signal-cloud:meta-signal-cloud:CredentialHandle
+}
+[ReadInput WriteInput]
+[ReadOutput WriteOutput]
+{
+  ReadInput [Observe ObservePlan Validate]
+  Observe Observation
+  ObservePlan PlanQuery
+  Validate Validation
+
+  ReadOutput [Observed Validated PlanObserved Missed]
+  PlanObserved PlanResult
+  Missed RejectionReport
+
+  WriteInput [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
+  RegisterAccount Registration
+  RotateCredential Rotation
+  SetPolicy Policy
+  PreparePlan PlanPreparation
+  PrepareProjection ProjectionPreparation
+  ApprovePlan Approval
+  ApplyPlan Application
+  RetireAccount Retirement
+
+  WriteOutput [AccountRegistered CredentialRotated PolicySet PlanPrepared PlanApproved PlanApplied AccountRetired RequestRejected]
+
+  RejectionReport { reason RejectionReason marker StateMarker }
+  RejectionReason [ProviderNotConfigured AccountUnknown PlanUnknown PlanNotApproved CapabilityUnauthorized ProviderRateLimited ProviderUnavailable]
+  StateMarker { CommitSequence * StateDigest * }
+  CommitSequence Integer
+  StateDigest Integer
+
+  AccountPolicyTable { bindings (Vec AccountBinding) }
+  AccountBinding { Provider * ProviderAccount * CredentialHandle * }
+  PlanTable { plans (Vec StoredPlan) }
+  StoredPlan { plan Plan approved Boolean marker StateMarker }
+}
+

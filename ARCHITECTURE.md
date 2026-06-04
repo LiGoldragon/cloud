@@ -93,18 +93,23 @@ on `next` branches. The schema placement is split by runtime plane:
 - `signal-cloud:next` — ordinary working Signal schema only, generated from
   `schema/lib.schema` and checked in as `src/schema/lib.rs`.
 - `owner-signal-cloud:next` — owner-only policy Signal schema only, renamed in
-  code to the `meta-signal-cloud` concept, generated from
+  code to `meta-signal-cloud`, generated from
   `schema/meta-signal-cloud.schema` and checked in as
   `src/schema/meta_signal_cloud.rs`.
-- `cloud/schema/nexus.concept.schema` — daemon-owned Nexus decision/effect
-  plane concept; imports contract `Input`/`Output` roots and SEMA roots.
-- `cloud/schema/sema.concept.schema` — daemon-owned SEMA state plane concept;
+- `cloud/schema/nexus.schema` — daemon-owned Nexus decision/effect
+  plane schema; imports contract `Input`/`Output` roots and SEMA roots.
+- `cloud/schema/sema.schema` — daemon-owned SEMA state plane schema;
   owns state-transition and table identity language.
 
 Signal contract repositories carry only the wire vocabulary that clients send
 and receive. Nexus decisions, SEMA state, provider effects, REST/provider
 adapters, policy state, plan state, credential-handle resolution, and future
-sema-engine persistence belong in the `cloud` runtime crate. Operator
-integrates from `next` by cherry-picking, re-implementing, rebasing, or merging
-the designer branch when the generated contract and runtime boundary are good
-enough.
+sema-engine persistence belong in the `cloud` runtime crate.
+
+`cloud/schema/sema.schema` is a real lowering target with current `schema-next`.
+`cloud/schema/nexus.schema` is a real runtime schema file too, but it waits for
+schema-next to expose/import contract `Input`/`Output` roots across crates; that
+is the remaining generator blocker before the daemon can generate its Nexus
+plane from the file. Operator integrates from `next` by cherry-picking,
+re-implementing, rebasing, or merging the designer branch when the generated
+contract and runtime boundary are good enough.
