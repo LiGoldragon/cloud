@@ -24,6 +24,12 @@ default = ["cloudflare"]
 cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
 google-cloud = []
 hetzner = []
+# Selects the schema-derived triad-engine surface (src/engine, src/schema_daemon)
+# built against the NEW generated signal-cloud / meta-signal-cloud contracts.
+# This surface is structurally incompatible with the pre-schema contract code in
+# the rest of this crate; see report §"Build gap". The contract crates are
+# resolved through the [patch] table below pointing at their `next` worktrees.
+schema-engine = ["cloudflare", "dep:meta-signal-cloud"]
 
 [dependencies]
 nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
@@ -33,10 +39,24 @@ rkyv              = { version = "0.8", default-features = false, features = ["st
 signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
 signal-domain-criome = { git = "https://github.com/LiGoldragon/signal-domain-criome.git", branch = "main" }
 signal-frame        = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
+# The owner policy contract under its triad-correct name. Schema-derived; used
+# only by the `schema-engine` surface. A direct path dep to the `next` worktree:
+# the `meta-signal-cloud` GitHub repo is not created yet, so a git dep is not
+# resolvable. Path is READ ONLY from this build.
+meta-signal-cloud = { path = "../../owner-signal-cloud/next", optional = true }
 serde             = { version = "1", features = ["derive"], optional = true }
 serde_json        = { version = "1", optional = true }
 thiserror         = "2"
 ureq              = { version = "2", features = ["json"], optional = true }
+
+# Resolve the schema-derived contract crates from their `next` worktrees. The
+# generated engine-trait + plane surface lives there and is not yet published.
+# These paths are READ ONLY from this crate's build; the prototype edits nothing
+# inside them. NOTE: patching `signal-cloud` to the schema-derived crate makes
+# the pre-schema code in src/lib.rs / src/daemon.rs / src/cloudflare.rs fail to
+# compile — the two contract surfaces cannot share one crate. See report.
+[patch."https://github.com/LiGoldragon/signal-cloud.git"]
+signal-cloud = { path = "../../signal-cloud/next" }
 
 [dev-dependencies]
 tempfile = "3"

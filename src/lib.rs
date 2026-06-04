@@ -32,6 +32,19 @@ pub mod cloudflare_cli;
 pub mod daemon;
 pub mod frame_io;
 
+// The schema-derived triad engines (Signal/Nexus/Sema impls for both cloud
+// contracts) and the two-listener daemon variant that drives them. This is the
+// port-in-progress modelled on the spirit pilot. It is feature-gated because it
+// depends on the NEW schema-derived `signal-cloud` / `meta-signal-cloud`
+// contracts, which carry the generated engine traits + plane namespaces and are
+// structurally distinct from the pre-schema published contracts the rest of
+// this crate still uses. Enabling `schema-engine` selects the generated-contract
+// surface (see Cargo.toml `[patch]` / report §"Build gap").
+#[cfg(feature = "schema-engine")]
+pub mod engine;
+#[cfg(feature = "schema-engine")]
+pub mod schema_daemon;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("io error: {0}")]

@@ -87,6 +87,7 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 name = "cloud"
 version = "0.1.0"
 dependencies = [
+ "meta-signal-cloud",
  "nota-codec",
  "nota-config",
  "owner-signal-cloud",
@@ -418,6 +419,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "meta-signal-cloud"
+version = "0.1.0"
+dependencies = [
+ "rkyv",
+ "schema-next",
+ "schema-rust-next",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -471,6 +481,25 @@ dependencies = [
 name = "nota-derive"
 version = "0.1.0"
 source = "git+https://github.com/LiGoldragon/nota-derive.git?branch=main#cde0e8262f2f90afbdf26d9b1b3561376723d816"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "nota-next"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#b33b5b51ce10aa7f44027b7290bfe008c90e7ce5"
+dependencies = [
+ "nota-next-derive",
+ "rkyv",
+]
+
+[[package]]
+name = "nota-next-derive"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#b33b5b51ce10aa7f44027b7290bfe008c90e7ce5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -583,6 +612,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a063ea72381527c2a0561da9c80000ef822bdd7c3241b1cc1b12100e3df081ee"
 dependencies = [
  "ptr_meta",
+]
+
+[[package]]
+name = "redb"
+version = "2.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -701,6 +739,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "schema-next"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#711b5fc9fe8809336c7fc54d90c1aa40cf614cc6"
+dependencies = [
+ "nota-next",
+ "redb",
+ "rkyv",
+]
+
+[[package]]
 name = "schema-rust"
 version = "0.1.0"
 source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#d61ebf25997c47c997c0dce1d576f870e3e8383c"
@@ -708,6 +756,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "schema",
+]
+
+[[package]]
+name = "schema-rust-next"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#a789a85e71b0c7b60402ca68c5ac553d6ca65a5c"
+dependencies = [
+ "schema-next",
 ]
 
 [[package]]
@@ -768,11 +824,10 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#eb93c663ff415db538d7aeed1fe53830f5594f50"
 dependencies = [
- "nota-codec",
  "rkyv",
- "signal-frame",
+ "schema-next",
+ "schema-rust-next",
 ]
 
 [[package]]
