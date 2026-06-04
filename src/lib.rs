@@ -426,6 +426,23 @@ pub struct RecordPlanParts {
 }
 
 #[derive(Debug)]
+struct OwnerReplyError {
+    reply: Box<OwnerReply>,
+}
+
+impl OwnerReplyError {
+    fn new(reply: OwnerReply) -> Self {
+        Self {
+            reply: Box::new(reply),
+        }
+    }
+
+    fn into_reply(self) -> OwnerReply {
+        *self.reply
+    }
+}
+
+#[derive(Debug)]
 pub struct Store {
     accounts: Mutex<Vec<AccountBinding>>,
     policy: Mutex<owner_signal_cloud::Policy>,
@@ -435,6 +452,12 @@ pub struct Store {
     last_known_records: Mutex<Vec<CachedRecordListing>>,
     #[cfg(feature = "cloudflare")]
     cloudflare: cloudflare::ProviderClient,
+}
+
+impl Default for Store {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Store {
@@ -950,7 +973,7 @@ impl Store {
         }
         let record_plan = match self.record_plan_for(provider, &zone, records) {
             Ok(plan) => plan,
-            Err(reply) => return reply,
+            Err(reply) => return reply.into_reply(),
         };
         let plan = Plan {
             identifier: PlanIdentifier::new(format!("{}-{:?}-plan", zone.as_str(), provider)),
@@ -972,7 +995,7 @@ impl Store {
         provider: Provider,
         zone: &DomainName,
         records: Vec<DomainNameSystemRecord>,
-    ) -> std::result::Result<RecordPlanParts, OwnerReply> {
+    ) -> std::result::Result<RecordPlanParts, OwnerReplyError> {
         let current = self.current_records_for_plan(provider, zone)?;
         Ok(RecordPlan::new(current.records, records).into_parts())
     }
@@ -981,12 +1004,12 @@ impl Store {
         &self,
         provider: Provider,
         zone: &DomainName,
-    ) -> std::result::Result<RecordListing, OwnerReply> {
+    ) -> std::result::Result<RecordListing, OwnerReplyError> {
         #[cfg(feature = "cloudflare")]
         if provider == Provider::Cloudflare {
-            return self
-                .cloudflare_record_listing(zone)
-                .map_err(Self::owner_reply_for_cloudflare_error);
+            return self.cloudflare_record_listing(zone).map_err(|error| {
+                OwnerReplyError::new(Self::owner_reply_for_cloudflare_error(error))
+            });
         }
         Ok(RecordListing { records: vec![] })
     }

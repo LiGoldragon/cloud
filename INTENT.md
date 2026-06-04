@@ -18,6 +18,10 @@ Spirit records; not embellished.*
   behavior belong in the runtime component or the relevant schema/runtime repo.
 - Runtime plane schemas should be implementation artifacts, not sketches. Missing generator support is a blocker to name explicitly, not a
   reason to leave sketch files as the destination.
+- Daemon runtime schema generation uses the shared `schema_rust_next::build`
+  driver. The cloud build script may skip generation while the ordinary and
+  meta Signal contract repos do not publish Cargo schema metadata; it must not
+  hard-code workspace checkout paths to compensate.
 - Provider credentials and secret bytes do not belong in source, logs, or
   ordinary Signal records; secret material crosses owner policy only by handle.
 

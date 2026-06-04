@@ -106,10 +106,14 @@ and receive. Nexus decisions, SEMA state, provider effects, REST/provider
 adapters, policy state, plan state, credential-handle resolution, and future
 sema-engine persistence belong in the `cloud` runtime crate.
 
-`cloud/schema/sema.schema` is a real lowering target with current `schema-next`.
-`cloud/schema/nexus.schema` is a real runtime schema file too, but it waits for
-schema-next to expose/import contract `Input`/`Output` roots across crates; that
-is the remaining generator blocker before the daemon can generate its Nexus
-plane from the file. Operator integrates from `next` by cherry-picking,
-re-implementing, rebasing, or merging the designer branch when the generated
-contract and runtime boundary are good enough.
+`cloud/build.rs` is wired to the shared `schema_rust_next::build` driver for
+daemon runtime schemas: `schema/nexus.schema` targets `NexusRuntime`, and
+`schema/sema.schema` targets `SemaRuntime`. The build currently skips
+generation unless dependency build metadata exposes the ordinary
+`signal-cloud` schema directory and the meta `meta-signal-cloud` schema
+directory. That skip is intentional: the contract repos still need real
+schema-derived modules plus Cargo `links` metadata, and the cloud daemon must
+not hard-code local checkout paths to paper over that missing contract
+surface. Operator integrates from `next` by cherry-picking, re-implementing,
+rebasing, or merging the designer branch when the generated contract and
+runtime boundary are good enough.
