@@ -88,24 +88,23 @@ unsupported replies rather than silent empty listings.
 
 `main` keeps the production-shaped runtime on the hand-written Rust +
 `signal_channel!` path while the breaking schema-derived contract work proceeds
-on `next` branches. The current `next` prototypes are:
+on `next` branches. The schema placement is split by runtime plane:
 
-- `signal-cloud:next` — ordinary working signal generated from
+- `signal-cloud:next` — ordinary working Signal schema only, generated from
   `schema/lib.schema` and checked in as `src/schema/lib.rs`.
-- `owner-signal-cloud:next` — policy signal renamed in code to the
-  `meta-signal-cloud` concept, generated from
+- `owner-signal-cloud:next` — owner-only policy Signal schema only, renamed in
+  code to the `meta-signal-cloud` concept, generated from
   `schema/meta-signal-cloud.schema` and checked in as
   `src/schema/meta_signal_cloud.rs`.
+- `cloud/schema/nexus.concept.schema` — daemon-owned Nexus decision/effect
+  plane concept; imports contract `Input`/`Output` roots and SEMA roots.
+- `cloud/schema/sema.concept.schema` — daemon-owned SEMA state plane concept;
+  owns state-transition and table identity language.
 
-`schema/cloud.concept.schema` is the operator-main alignment marker for the
-combined runtime shape. It names the Signal / Nexus / SEMA roots the runtime
-will implement when `main` absorbs the next contracts: ordinary observation and
-validation, owner-only policy and plan application, SEMA read/write command
-objects, and Cloudflare effect commands.
-
-The integration boundary remains the daemon: the signal contract crates own the
-generated wire vocabulary; `cloud` owns the handwritten runtime actors, provider
-effects, policy state, plan state, credential-handle resolution, and future
-sema-engine persistence. Operator integrates from `next` by cherry-picking,
-re-implementing, rebasing, or merging the designer branch when the generated
-contract and runtime boundary are good enough.
+Signal contract repositories carry only the wire vocabulary that clients send
+and receive. Nexus decisions, SEMA state, provider effects, REST/provider
+adapters, policy state, plan state, credential-handle resolution, and future
+sema-engine persistence belong in the `cloud` runtime crate. Operator
+integrates from `next` by cherry-picking, re-implementing, rebasing, or merging
+the designer branch when the generated contract and runtime boundary are good
+enough.

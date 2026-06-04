@@ -1,0 +1,58 @@
+;; cloud SEMA plane concept — daemon-owned.
+;;
+;; This is not a Signal contract. It names cloud daemon durable state reads and
+;; writes. Contract repos may carry record types that cross the Signal wire, but
+;; table identity, policy state, plan state, and state-transition commands belong
+;; here in the runtime component.
+
+{}
+[ReadInput WriteInput]
+[ReadOutput WriteOutput]
+{
+  ReadInput [Observe ObservePlan Validate]
+  Observe signal-cloud::Observation
+  ObservePlan signal-cloud::PlanQuery
+  Validate signal-cloud::Validation
+
+  ReadOutput [Observed Validated PlanObserved Missed]
+  Observed signal-cloud::Observed
+  Validated signal-cloud::Validated
+  PlanObserved signal-cloud::PlanResult
+  Missed RejectionReport
+
+  WriteInput [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
+  RegisterAccount meta-signal-cloud::Registration
+  RotateCredential meta-signal-cloud::Rotation
+  SetPolicy meta-signal-cloud::Policy
+  PreparePlan meta-signal-cloud::PlanPreparation
+  PrepareProjection meta-signal-cloud::ProjectionPreparation
+  ApprovePlan meta-signal-cloud::Approval
+  ApplyPlan meta-signal-cloud::Application
+  RetireAccount meta-signal-cloud::Retirement
+
+  WriteOutput [AccountRegistered CredentialRotated PolicySet PlanPrepared PlanApproved PlanApplied AccountRetired RequestRejected]
+  AccountRegistered meta-signal-cloud::AccountRegistered
+  CredentialRotated meta-signal-cloud::CredentialRotated
+  PolicySet meta-signal-cloud::PolicySet
+  PlanPrepared meta-signal-cloud::PlanPrepared
+  PlanApproved meta-signal-cloud::PlanApproved
+  PlanApplied meta-signal-cloud::PlanApplied
+  AccountRetired meta-signal-cloud::AccountRetired
+  RequestRejected meta-signal-cloud::RequestRejected
+
+  RejectionReport { reason RejectionReason marker StateMarker }
+  RejectionReason [ProviderNotConfigured AccountUnknown PlanUnknown PlanNotApproved CapabilityUnauthorized ProviderRateLimited ProviderUnavailable]
+  StateMarker { CommitSequence * StateDigest * }
+  CommitSequence Integer
+  StateDigest Integer
+
+  AccountPolicyTable { bindings (Vec AccountBinding) }
+  AccountBinding { Provider * ProviderAccount * CredentialHandle * }
+  PlanTable { plans (Vec StoredPlan) }
+  StoredPlan { plan meta-signal-cloud::Plan approved Boolean marker StateMarker }
+  Provider signal-cloud::Provider
+  ProviderAccount signal-cloud::ProviderAccount
+  CredentialHandle meta-signal-cloud::CredentialHandle
+}
+
+[(Version 0 1) (Status Concept)]
