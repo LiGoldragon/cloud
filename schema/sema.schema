@@ -10,26 +10,26 @@
   Observed signal-cloud:lib:Observed
   Validated signal-cloud:lib:Validated
   PlanResult signal-cloud:lib:PlanResult
-  Registration meta-signal-cloud:meta-signal-cloud:Registration
-  Rotation meta-signal-cloud:meta-signal-cloud:Rotation
-  Policy meta-signal-cloud:meta-signal-cloud:Policy
-  PlanPreparation meta-signal-cloud:meta-signal-cloud:PlanPreparation
-  ProjectionPreparation meta-signal-cloud:meta-signal-cloud:ProjectionPreparation
-  Approval meta-signal-cloud:meta-signal-cloud:Approval
-  Application meta-signal-cloud:meta-signal-cloud:Application
-  Retirement meta-signal-cloud:meta-signal-cloud:Retirement
-  AccountRegistered meta-signal-cloud:meta-signal-cloud:AccountRegistered
-  CredentialRotated meta-signal-cloud:meta-signal-cloud:CredentialRotated
-  PolicySet meta-signal-cloud:meta-signal-cloud:PolicySet
-  PlanPrepared meta-signal-cloud:meta-signal-cloud:PlanPrepared
-  PlanApproved meta-signal-cloud:meta-signal-cloud:PlanApproved
-  PlanApplied meta-signal-cloud:meta-signal-cloud:PlanApplied
-  AccountRetired meta-signal-cloud:meta-signal-cloud:AccountRetired
-  RequestRejected meta-signal-cloud:meta-signal-cloud:RequestRejected
-  Plan meta-signal-cloud:meta-signal-cloud:Plan
+  Registration meta-signal-cloud:lib:Registration
+  Rotation meta-signal-cloud:lib:Rotation
+  Policy meta-signal-cloud:lib:Policy
+  PlanPreparation meta-signal-cloud:lib:PlanPreparation
+  ProjectionPreparation meta-signal-cloud:lib:ProjectionPreparation
+  Approval meta-signal-cloud:lib:Approval
+  Application meta-signal-cloud:lib:Application
+  Retirement meta-signal-cloud:lib:Retirement
+  AccountRegistered meta-signal-cloud:lib:AccountRegistered
+  CredentialRotated meta-signal-cloud:lib:CredentialRotated
+  PolicySet meta-signal-cloud:lib:PolicySet
+  PlanPrepared meta-signal-cloud:lib:PlanPrepared
+  PlanApproved meta-signal-cloud:lib:PlanApproved
+  PlanApplied meta-signal-cloud:lib:PlanApplied
+  AccountRetired meta-signal-cloud:lib:AccountRetired
+  RequestRejected meta-signal-cloud:lib:RequestRejected
+  Plan meta-signal-cloud:lib:Plan
   Provider signal-cloud:lib:Provider
   ProviderAccount signal-cloud:lib:ProviderAccount
-  CredentialHandle meta-signal-cloud:meta-signal-cloud:CredentialHandle
+  CredentialHandle meta-signal-cloud:lib:CredentialHandle
 }
 [ReadInput WriteInput]
 [ReadOutput WriteOutput]
@@ -66,4 +66,3 @@
   PlanTable { plans (Vec StoredPlan) }
   StoredPlan { plan Plan approved Boolean marker StateMarker }
 }
-

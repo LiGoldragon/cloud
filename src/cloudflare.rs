@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use owner_signal_cloud::CredentialHandle;
+use meta_signal_cloud::CredentialHandle;
 use serde::{Deserialize, Serialize};
 use signal_cloud::{
     DomainName, DomainNameSystemRecord, Plan, Provider, ProviderAccount, ProxyMode, RecordKind,

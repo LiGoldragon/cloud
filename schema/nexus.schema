@@ -7,8 +7,8 @@
 {
   OrdinaryInput signal-cloud:lib:Input
   OrdinaryOutput signal-cloud:lib:Output
-  MetaInput meta-signal-cloud:meta-signal-cloud:Input
-  MetaOutput meta-signal-cloud:meta-signal-cloud:Output
+  MetaInput meta-signal-cloud:lib:Input
+  MetaOutput meta-signal-cloud:lib:Output
   SemaReadInput cloud:sema:ReadInput
   SemaReadOutput cloud:sema:ReadOutput
   SemaWriteInput cloud:sema:WriteInput
@@ -17,8 +17,8 @@
   RecordQuery signal-cloud:lib:RecordQuery
   ZoneListing signal-cloud:lib:ZoneListing
   RecordListing signal-cloud:lib:RecordListing
-  PlanIdentifier meta-signal-cloud:meta-signal-cloud:PlanIdentifier
-  PlanApplied meta-signal-cloud:meta-signal-cloud:PlanApplied
+  PlanIdentifier meta-signal-cloud:lib:PlanIdentifier
+  PlanApplied meta-signal-cloud:lib:PlanApplied
 }
 [SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
 [CommandSemaRead CommandSemaWrite CommandEffect ReplyToSignal Continue]
@@ -48,4 +48,3 @@
   NexusInput [SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
   NexusOutput [CommandSemaRead CommandSemaWrite CommandEffect ReplyToSignal Continue]
 }
-

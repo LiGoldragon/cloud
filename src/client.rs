@@ -3,15 +3,15 @@ use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
+use meta_signal_cloud::{ChannelRequest as MetaRequest, Reply as MetaReply};
 use nota_codec::{Decoder, Encoder, NotaDecode, NotaEncode, Token};
-use owner_signal_cloud::{ChannelRequest as OwnerRequest, Reply as OwnerReply};
 use signal_cloud::{Reply as CloudReply, Request as CloudRequest};
 use signal_frame::{
     CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
     HandshakeRequest, LaneSequence, Reply as FrameReply, SessionEpoch, SubReply,
 };
 
-use crate::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
+use crate::frame_io::{MetaFrameIo, OrdinaryFrameIo};
 use crate::{Error, Result};
 
 const DEFAULT_ORDINARY_SOCKET_PATH: &str = "/run/cloud/cloud.sock";
@@ -22,7 +22,7 @@ const OWNER_SOCKET_ENVIRONMENT_VARIABLE: &str = "CLOUD_OWNER_SOCKET_PATH";
 signal_frame::signal_cli! {
     pub struct CommandLineDispatch {
         working signal_cloud::Operation;
-        owner owner_signal_cloud::Operation;
+        owner meta_signal_cloud::Operation;
     }
 }
 
@@ -70,16 +70,15 @@ impl Client {
         }
     }
 
-    pub fn send_owner(&self, request: OwnerRequest) -> Result<OwnerReply> {
+    pub fn send_owner(&self, request: MetaRequest) -> Result<MetaReply> {
         let mut stream = UnixStream::connect(&self.owner_socket_path)?;
         self.handshake_owner(&mut stream)?;
         let exchange = fresh_exchange();
-        let frame =
-            owner_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-        OwnerFrameIo::write(&mut stream, &frame)?;
+        let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
+        MetaFrameIo::write(&mut stream, &frame)?;
         stream.flush()?;
 
-        let reply = OwnerFrameIo::read(&mut stream)?;
+        let reply = MetaFrameIo::read(&mut stream)?;
         match reply.into_body() {
             ExchangeFrameBody::Reply {
                 exchange: reply_exchange,
@@ -114,11 +113,11 @@ impl Client {
     }
 
     fn handshake_owner(&self, stream: &mut UnixStream) -> Result<()> {
-        let frame = owner_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
+        let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
             HandshakeRequest::current(),
         ));
-        OwnerFrameIo::write(stream, &frame)?;
-        let reply = OwnerFrameIo::read(stream)?;
+        MetaFrameIo::write(stream, &frame)?;
+        let reply = MetaFrameIo::read(stream)?;
         match reply.into_body() {
             ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_)) => Ok(()),
             ExchangeFrameBody::HandshakeReply(HandshakeReply::Rejected(_)) => {
@@ -140,7 +139,7 @@ impl Client {
         }
     }
 
-    fn unwrap_single_owner_reply(reply: FrameReply<OwnerReply>) -> Result<OwnerReply> {
+    fn unwrap_single_owner_reply(reply: FrameReply<MetaReply>) -> Result<MetaReply> {
         match reply {
             FrameReply::Accepted { per_operation, .. } => {
                 match per_operation.into_head_and_tail() {
@@ -156,7 +155,7 @@ impl Client {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliRequest {
     Working(CloudRequest),
-    Owner(OwnerRequest),
+    Owner(MetaRequest),
 }
 
 impl CliRequest {
@@ -200,7 +199,7 @@ impl CliRequest {
 
     fn decode_owner(text: &str) -> Result<Self> {
         let mut decoder = Decoder::new(text);
-        let payload = OwnerRequest::decode(&mut decoder)?;
+        let payload = MetaRequest::decode(&mut decoder)?;
         RequestEnd::new(&mut decoder).expect()?;
         Ok(Self::Owner(payload))
     }

@@ -8,7 +8,7 @@ Google Cloud DNS, Hetzner Cloud, and other cloud APIs.
 
 - Runtime repo: `cloud`.
 - Ordinary contract: `signal-cloud`.
-- Owner contract: `owner-signal-cloud`.
+- Meta contract: `meta-signal-cloud`.
 
 The CLI is bundled runtime machinery, not a separate triad leg. The CLI has
 exactly one Signal peer: `cloud-daemon`.
@@ -43,12 +43,12 @@ store. Slow provider work belongs behind provider actors with timeouts.
 ## Current Implementation Slice
 
 1. Bind ordinary and owner Unix sockets.
-2. Decode `signal-cloud` and `owner-signal-cloud` frames.
+2. Decode `signal-cloud` and `meta-signal-cloud` frames.
 3. Return typed unsupported/configuration replies when no provider account is
    configured.
 4. Store account policy, prepared plans, and lossy last-known provider reads
    through a runtime store abstraction.
-5. Generate local plans from `owner-signal-cloud::PlanPreparation`.
+5. Generate local plans from `meta-signal-cloud::PlanPreparation`.
 6. Require owner approval before apply.
 7. Resolve Cloudflare credential handles through environment variables and list
    Cloudflare zones and DNS records through the daemon-owned provider client.
@@ -70,7 +70,7 @@ small so persistence can be swapped in after that dependency is removed.
 
 Cloudflare DNS observation and DNS-record application are production-shaped:
 ordinary reads use the ordinary Signal socket, owner-approved application uses
-the owner Signal socket, both read only owner-registered accounts and zones,
+the meta Signal socket, both read only owner-registered accounts and zones,
 and the daemon caches the last known record listing after Cloudflare accepts a
 read or mutation. Redirect observation and redirect mutation are future slices;
 until the Rulesets/Page-Rules read path exists, redirect requests return typed
@@ -87,15 +87,13 @@ unsupported replies rather than silent empty listings.
 ## Schema-engine upgrade track
 
 `main` keeps the production-shaped runtime on the hand-written Rust +
-`signal_channel!` path while the breaking schema-derived contract work proceeds
-on `next` branches. The schema placement is split by runtime plane:
+`signal_channel!` path while also carrying source-visible schema artifacts for
+the daemon runtime planes. The schema placement is split by runtime plane:
 
-- `signal-cloud:next` — ordinary working Signal schema only, generated from
-  `schema/lib.schema` and checked in as `src/schema/lib.rs`.
-- `owner-signal-cloud:next` — owner-only policy Signal schema only, renamed in
-  code to `meta-signal-cloud`, generated from
-  `schema/meta-signal-cloud.schema` and checked in as
-  `src/schema/meta_signal_cloud.rs`.
+- `signal-cloud` — ordinary working Signal schema only, published from
+  `schema/lib.schema` through Cargo schema metadata.
+- `meta-signal-cloud` — meta (owner-only policy) policy Signal schema only,
+  published from `schema/lib.schema` through Cargo schema metadata.
 - `cloud/schema/nexus.schema` — daemon-owned Nexus decision/effect
   plane schema; imports contract `Input`/`Output` roots and SEMA roots.
 - `cloud/schema/sema.schema` — daemon-owned SEMA state plane schema;
@@ -108,12 +106,8 @@ sema-engine persistence belong in the `cloud` runtime crate.
 
 `cloud/build.rs` is wired to the shared `schema_rust_next::build` driver for
 daemon runtime schemas: `schema/nexus.schema` targets `NexusRuntime`, and
-`schema/sema.schema` targets `SemaRuntime`. The build currently skips
-generation unless dependency build metadata exposes the ordinary
+`schema/sema.schema` targets `SemaRuntime`. The build consumes the ordinary
 `signal-cloud` schema directory and the meta `meta-signal-cloud` schema
-directory. That skip is intentional: the contract repos still need real
-schema-derived modules plus Cargo `links` metadata, and the cloud daemon must
-not hard-code local checkout paths to paper over that missing contract
-surface. Operator integrates from `next` by cherry-picking, re-implementing,
-rebasing, or merging the designer branch when the generated contract and
-runtime boundary are good enough.
+directory from Cargo metadata, then freshness-checks `schema/*.asschema` and
+`src/schema/{nexus,sema}.rs`. The daemon must not hard-code local checkout
+paths for contract schemas.

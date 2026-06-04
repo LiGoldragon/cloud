@@ -6,13 +6,12 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use nota_codec::NotaRecord;
-use owner_signal_cloud::{
+use meta_signal_cloud::{
     AccountRegistered, AccountRetired, Application, Approval, CredentialRotated,
-    Operation as OwnerOperation, PlanApproved, PlanPreparation, PolicySet, ProjectionPreparation,
-    Registration, Reply as OwnerReply, RequestRejected as OwnerRequestRejected, Retirement,
-    Rotation,
+    Operation as MetaOperation, PlanApproved, PlanPreparation, PolicySet, ProjectionPreparation,
+    Registration, Reply as MetaReply, RequestRejected as MetaRequestRejected, Retirement, Rotation,
 };
+use nota_codec::NotaRecord;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use signal_cloud::{
     Capability, CapabilityObservation, CapabilityQuery, CapabilityReport, CapabilityState,
@@ -102,8 +101,8 @@ nota_config::impl_rkyv_configuration!(DaemonConfiguration);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountBinding {
     pub(crate) provider: Provider,
-    pub(crate) account: owner_signal_cloud::ProviderAccount,
-    pub(crate) credential: owner_signal_cloud::CredentialHandle,
+    pub(crate) account: meta_signal_cloud::ProviderAccount,
+    pub(crate) credential: meta_signal_cloud::CredentialHandle,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -426,18 +425,18 @@ pub struct RecordPlanParts {
 }
 
 #[derive(Debug)]
-struct OwnerReplyError {
-    reply: Box<OwnerReply>,
+struct MetaReplyError {
+    reply: Box<MetaReply>,
 }
 
-impl OwnerReplyError {
-    fn new(reply: OwnerReply) -> Self {
+impl MetaReplyError {
+    fn new(reply: MetaReply) -> Self {
         Self {
             reply: Box::new(reply),
         }
     }
 
-    fn into_reply(self) -> OwnerReply {
+    fn into_reply(self) -> MetaReply {
         *self.reply
     }
 }
@@ -445,7 +444,7 @@ impl OwnerReplyError {
 #[derive(Debug)]
 pub struct Store {
     accounts: Mutex<Vec<AccountBinding>>,
-    policy: Mutex<owner_signal_cloud::Policy>,
+    policy: Mutex<meta_signal_cloud::Policy>,
     plans: Mutex<Vec<Plan>>,
     approved_plans: Mutex<Vec<PlanIdentifier>>,
     last_known_zones: Mutex<Vec<Zone>>,
@@ -466,7 +465,7 @@ impl Store {
         let cloudflare = cloudflare::ProviderClient::production();
         Self::with_parts(
             Vec::new(),
-            owner_signal_cloud::Policy {
+            meta_signal_cloud::Policy {
                 zones: Vec::new(),
                 capabilities: Vec::new(),
             },
@@ -479,7 +478,7 @@ impl Store {
     pub fn with_cloudflare_provider(cloudflare: cloudflare::ProviderClient) -> Self {
         Self::with_parts(
             Vec::new(),
-            owner_signal_cloud::Policy {
+            meta_signal_cloud::Policy {
                 zones: Vec::new(),
                 capabilities: Vec::new(),
             },
@@ -490,7 +489,7 @@ impl Store {
     #[cfg(feature = "cloudflare")]
     fn with_parts(
         accounts: Vec<AccountBinding>,
-        policy: owner_signal_cloud::Policy,
+        policy: meta_signal_cloud::Policy,
         cloudflare: cloudflare::ProviderClient,
     ) -> Self {
         Self {
@@ -505,7 +504,7 @@ impl Store {
     }
 
     #[cfg(not(feature = "cloudflare"))]
-    fn with_parts(accounts: Vec<AccountBinding>, policy: owner_signal_cloud::Policy) -> Self {
+    fn with_parts(accounts: Vec<AccountBinding>, policy: meta_signal_cloud::Policy) -> Self {
         Self {
             accounts: Mutex::new(accounts),
             policy: Mutex::new(policy),
@@ -536,8 +535,8 @@ impl Store {
 
     pub fn handle_owner_request(
         &self,
-        request: owner_signal_cloud::ChannelRequest,
-    ) -> owner_signal_cloud::ChannelReply {
+        request: meta_signal_cloud::ChannelRequest,
+    ) -> meta_signal_cloud::ChannelReply {
         let replies = request
             .payloads
             .into_iter()
@@ -727,7 +726,7 @@ impl Store {
     #[cfg(feature = "cloudflare")]
     fn observe_cloudflare_zones(
         &self,
-        account: Option<owner_signal_cloud::ProviderAccount>,
+        account: Option<meta_signal_cloud::ProviderAccount>,
     ) -> CloudReply {
         match self.cloudflare_zone_listing(account) {
             Ok(listing) => CloudReply::Observed(ObservationResult::Zones(listing)),
@@ -764,7 +763,7 @@ impl Store {
     #[cfg(feature = "cloudflare")]
     fn cloudflare_zone_listing(
         &self,
-        account: Option<owner_signal_cloud::ProviderAccount>,
+        account: Option<meta_signal_cloud::ProviderAccount>,
     ) -> cloudflare::Result<ZoneListing> {
         let bindings = self.account_bindings(Provider::Cloudflare, account);
         let mut zones = Vec::new();
@@ -815,7 +814,7 @@ impl Store {
     fn account_bindings(
         &self,
         provider: Provider,
-        account: Option<owner_signal_cloud::ProviderAccount>,
+        account: Option<meta_signal_cloud::ProviderAccount>,
     ) -> Vec<AccountBinding> {
         self.accounts
             .lock()
@@ -857,7 +856,7 @@ impl Store {
     }
 
     #[cfg(feature = "cloudflare")]
-    fn allowed_zone_names(&self, account: &owner_signal_cloud::ProviderAccount) -> Vec<DomainName> {
+    fn allowed_zone_names(&self, account: &meta_signal_cloud::ProviderAccount) -> Vec<DomainName> {
         self.policy
             .lock()
             .expect("policy mutex")
@@ -941,13 +940,13 @@ impl Store {
         })
     }
 
-    fn prepare_projection(&self, preparation: ProjectionPreparation) -> OwnerReply {
+    fn prepare_projection(&self, preparation: ProjectionPreparation) -> MetaReply {
         self.prepare_plan(PlanPreparation {
             desired_state: DomainProjection::from_preparation(preparation).into_desired_state(),
         })
     }
 
-    fn prepare_plan(&self, preparation: PlanPreparation) -> OwnerReply {
+    fn prepare_plan(&self, preparation: PlanPreparation) -> MetaReply {
         let DesiredState {
             provider,
             zone,
@@ -955,20 +954,20 @@ impl Store {
             redirects,
         } = preparation.desired_state;
         if !Self::provider_is_built(provider) {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         }
         if !self.provider_is_configured(provider) {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         }
         if !redirects.is_empty()
             && !Self::provider_supports_capability(provider, Capability::RedirectRules)
         {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::CapabilityUnauthorized,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::CapabilityUnauthorized,
             });
         }
         let record_plan = match self.record_plan_for(provider, &zone, records) {
@@ -987,7 +986,7 @@ impl Store {
             redirect_sources_to_delete: vec![],
         };
         self.plans.lock().expect("plans mutex").push(plan.clone());
-        OwnerReply::PlanPrepared(plan)
+        MetaReply::PlanPrepared(plan)
     }
 
     fn record_plan_for(
@@ -995,7 +994,7 @@ impl Store {
         provider: Provider,
         zone: &DomainName,
         records: Vec<DomainNameSystemRecord>,
-    ) -> std::result::Result<RecordPlanParts, OwnerReplyError> {
+    ) -> std::result::Result<RecordPlanParts, MetaReplyError> {
         let current = self.current_records_for_plan(provider, zone)?;
         Ok(RecordPlan::new(current.records, records).into_parts())
     }
@@ -1004,11 +1003,11 @@ impl Store {
         &self,
         provider: Provider,
         zone: &DomainName,
-    ) -> std::result::Result<RecordListing, OwnerReplyError> {
+    ) -> std::result::Result<RecordListing, MetaReplyError> {
         #[cfg(feature = "cloudflare")]
         if provider == Provider::Cloudflare {
             return self.cloudflare_record_listing(zone).map_err(|error| {
-                OwnerReplyError::new(Self::owner_reply_for_cloudflare_error(error))
+                MetaReplyError::new(Self::owner_reply_for_cloudflare_error(error))
             });
         }
         Ok(RecordListing { records: vec![] })
@@ -1028,23 +1027,23 @@ impl Store {
         }
     }
 
-    fn handle_owner_operation(&self, operation: OwnerOperation) -> OwnerReply {
+    fn handle_owner_operation(&self, operation: MetaOperation) -> MetaReply {
         match operation {
-            OwnerOperation::RegisterAccount(registration) => self.register_account(registration),
-            OwnerOperation::RotateCredential(rotation) => self.rotate_credential(rotation),
-            OwnerOperation::SetPolicy(policy) => self.set_policy(policy),
-            OwnerOperation::PreparePlan(preparation) => self.prepare_plan(preparation),
-            OwnerOperation::PrepareProjection(preparation) => self.prepare_projection(preparation),
-            OwnerOperation::ApprovePlan(approval) => self.approve_plan(approval),
-            OwnerOperation::ApplyPlan(application) => self.apply_plan(application),
-            OwnerOperation::RetireAccount(retirement) => self.retire_account(retirement),
+            MetaOperation::RegisterAccount(registration) => self.register_account(registration),
+            MetaOperation::RotateCredential(rotation) => self.rotate_credential(rotation),
+            MetaOperation::SetPolicy(policy) => self.set_policy(policy),
+            MetaOperation::PreparePlan(preparation) => self.prepare_plan(preparation),
+            MetaOperation::PrepareProjection(preparation) => self.prepare_projection(preparation),
+            MetaOperation::ApprovePlan(approval) => self.approve_plan(approval),
+            MetaOperation::ApplyPlan(application) => self.apply_plan(application),
+            MetaOperation::RetireAccount(retirement) => self.retire_account(retirement),
         }
     }
 
-    fn register_account(&self, registration: Registration) -> OwnerReply {
+    fn register_account(&self, registration: Registration) -> MetaReply {
         if !Self::provider_is_built(registration.provider) {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         }
         #[cfg(feature = "cloudflare")]
@@ -1066,58 +1065,58 @@ impl Store {
         } else {
             accounts.push(binding);
         }
-        OwnerReply::AccountRegistered(AccountRegistered {
+        MetaReply::AccountRegistered(AccountRegistered {
             provider: registration.provider,
             account: registration.account,
         })
     }
 
-    fn rotate_credential(&self, rotation: Rotation) -> OwnerReply {
+    fn rotate_credential(&self, rotation: Rotation) -> MetaReply {
         let mut accounts = self.accounts.lock().expect("accounts mutex");
         if let Some(existing) = accounts.iter_mut().find(|account| {
             account.provider == rotation.provider && account.account == rotation.account
         }) {
             existing.credential = rotation.credential;
-            OwnerReply::CredentialRotated(CredentialRotated {
+            MetaReply::CredentialRotated(CredentialRotated {
                 provider: rotation.provider,
                 account: rotation.account,
             })
         } else {
-            OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::AccountUnknown,
+            MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::AccountUnknown,
             })
         }
     }
 
-    fn set_policy(&self, policy: owner_signal_cloud::Policy) -> OwnerReply {
+    fn set_policy(&self, policy: meta_signal_cloud::Policy) -> MetaReply {
         let capability_policy_count = policy.capabilities.len() as u64;
         let zone_policy_count = policy.zones.len() as u64;
         *self.policy.lock().expect("policy mutex") = policy;
-        OwnerReply::PolicySet(PolicySet {
+        MetaReply::PolicySet(PolicySet {
             capability_policy_count,
             zone_policy_count,
         })
     }
 
-    fn approve_plan(&self, approval: Approval) -> OwnerReply {
+    fn approve_plan(&self, approval: Approval) -> MetaReply {
         if !self.plan_exists(&approval.plan) {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::PlanUnknown,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::PlanUnknown,
             });
         }
         self.approved_plans
             .lock()
             .expect("approved plans mutex")
             .push(approval.plan.clone());
-        OwnerReply::PlanApproved(PlanApproved {
+        MetaReply::PlanApproved(PlanApproved {
             plan: approval.plan,
         })
     }
 
-    fn apply_plan(&self, application: Application) -> OwnerReply {
+    fn apply_plan(&self, application: Application) -> MetaReply {
         let Some(plan) = self.plan_for_identifier(&application.plan) else {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::PlanUnknown,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::PlanUnknown,
             });
         };
         if !self
@@ -1127,28 +1126,28 @@ impl Store {
             .iter()
             .any(|plan| plan == &application.plan)
         {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::PlanNotApproved,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::PlanNotApproved,
             });
         }
         if Self::plan_includes_redirect_changes(&plan) {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::CapabilityUnauthorized,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::CapabilityUnauthorized,
             });
         }
         match plan.provider {
             Provider::Cloudflare => self.apply_cloudflare_plan(plan),
-            _ => OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            _ => MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
             }),
         }
     }
 
     #[cfg(feature = "cloudflare")]
-    fn apply_cloudflare_plan(&self, plan: Plan) -> OwnerReply {
+    fn apply_cloudflare_plan(&self, plan: Plan) -> MetaReply {
         let Some(binding) = self.account_binding_for_zone(Provider::Cloudflare, &plan.zone) else {
-            return OwnerReply::RequestRejected(OwnerRequestRejected {
-                reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
             });
         };
         let zone_identifier = match self.cloudflare_zone_identifier(&binding, &plan.zone) {
@@ -1163,34 +1162,34 @@ impl Store {
             Err(error) => return Self::owner_reply_for_cloudflare_error(error),
         };
         self.replace_last_known_records(Provider::Cloudflare, plan.zone.clone(), listing);
-        OwnerReply::PlanApplied(owner_signal_cloud::PlanApplied {
+        MetaReply::PlanApplied(meta_signal_cloud::PlanApplied {
             plan: plan.identifier,
         })
     }
 
     #[cfg(not(feature = "cloudflare"))]
-    fn apply_cloudflare_plan(&self, _plan: Plan) -> OwnerReply {
-        OwnerReply::RequestRejected(OwnerRequestRejected {
-            reason: owner_signal_cloud::RejectionReason::ProviderNotConfigured,
+    fn apply_cloudflare_plan(&self, _plan: Plan) -> MetaReply {
+        MetaReply::RequestRejected(MetaRequestRejected {
+            reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
         })
     }
 
     #[cfg(feature = "cloudflare")]
-    fn owner_reply_for_cloudflare_error(error: cloudflare::Error) -> OwnerReply {
+    fn owner_reply_for_cloudflare_error(error: cloudflare::Error) -> MetaReply {
         let reason = match error {
             cloudflare::Error::CredentialUnavailable(_) => {
-                owner_signal_cloud::RejectionReason::CredentialHandleUnknown
+                meta_signal_cloud::RejectionReason::CredentialHandleUnknown
             }
             cloudflare::Error::ZoneNotFound(_) => {
-                owner_signal_cloud::RejectionReason::ProviderNotConfigured
+                meta_signal_cloud::RejectionReason::ProviderNotConfigured
             }
             cloudflare::Error::RequestFailed(_)
             | cloudflare::Error::RequestRejected(_)
             | cloudflare::Error::UnsupportedRecordKind(_) => {
-                owner_signal_cloud::RejectionReason::PlanGenerationFailed
+                meta_signal_cloud::RejectionReason::PlanGenerationFailed
             }
         };
-        OwnerReply::RequestRejected(OwnerRequestRejected { reason })
+        MetaReply::RequestRejected(MetaRequestRejected { reason })
     }
 
     fn plan_includes_redirect_changes(plan: &Plan) -> bool {
@@ -1199,12 +1198,12 @@ impl Store {
             || !plan.redirect_sources_to_delete.is_empty()
     }
 
-    fn retire_account(&self, retirement: Retirement) -> OwnerReply {
+    fn retire_account(&self, retirement: Retirement) -> MetaReply {
         let mut accounts = self.accounts.lock().expect("accounts mutex");
         accounts.retain(|account| {
             !(account.provider == retirement.provider && account.account == retirement.account)
         });
-        OwnerReply::AccountRetired(AccountRetired {
+        MetaReply::AccountRetired(AccountRetired {
             provider: retirement.provider,
             account: retirement.account,
         })

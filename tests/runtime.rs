@@ -10,16 +10,16 @@ use cloud::cloudflare::{
     Api as CloudflareApi, ApiRecord, ApiZone, CredentialSource, RecordIdentifier, Token,
 };
 use cloud::daemon::Daemon;
-use cloud::frame_io::{OrdinaryFrameIo, OwnerFrameIo};
-use nota_codec::NotaEncode;
+use cloud::frame_io::{MetaFrameIo, OrdinaryFrameIo};
 #[cfg(feature = "cloudflare")]
-use owner_signal_cloud::{
+use meta_signal_cloud::{
     CapabilityDirective, CapabilityPolicy, PlanPreparation, Policy, ProjectionPreparation,
     ZonePolicy,
 };
-use owner_signal_cloud::{
-    CredentialHandle, Operation as OwnerOperation, Registration, Reply as OwnerReply,
+use meta_signal_cloud::{
+    CredentialHandle, Operation as MetaOperation, Registration, Reply as MetaReply,
 };
+use nota_codec::NotaEncode;
 use signal_cloud::{
     Capability, CapabilityReport, CapabilityState, DomainName, Observation,
     Operation as CloudOperation, Provider, ProviderAccount, Reply as CloudReply,
@@ -212,7 +212,7 @@ fn cloudflare_fixture_store(
 
 #[cfg(feature = "cloudflare")]
 fn configure_cloudflare_account(store: &Store, credential: &str) {
-    let registration = OwnerOperation::RegisterAccount(Registration {
+    let registration = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
         credential: CredentialHandle::new(credential),
@@ -223,7 +223,7 @@ fn configure_cloudflare_account(store: &Store, credential: &str) {
         FrameReply::Accepted { .. }
     ));
 
-    let policy = OwnerOperation::SetPolicy(Policy {
+    let policy = MetaOperation::SetPolicy(Policy {
         zones: vec![ZonePolicy {
             provider: Provider::Cloudflare,
             account: ProviderAccount::new("primary"),
@@ -332,7 +332,7 @@ fn command_line_request_rejects_flags_and_extra_arguments() {
 
 #[test]
 fn command_line_request_decodes_owner_contract_by_head() {
-    let request = OwnerOperation::RegisterAccount(Registration {
+    let request = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
         credential: CredentialHandle::new("cloudflare-dns-token"),
@@ -380,7 +380,7 @@ fn daemon_reports_not_built_provider_over_frame_socket() {
 #[cfg(not(feature = "google-cloud"))]
 fn not_built_provider_dispatch_is_never_configured() {
     let store = Store::new();
-    let registration = OwnerOperation::RegisterAccount(Registration {
+    let registration = MetaOperation::RegisterAccount(Registration {
         provider: Provider::GoogleCloud,
         account: ProviderAccount::new("primary"),
         credential: CredentialHandle::new("google-cloud-dns-token"),
@@ -459,7 +459,7 @@ fn cloudflare_record_observation_uses_provider_actor_and_caches_last_known_state
 #[cfg(feature = "cloudflare")]
 fn cloudflare_record_observation_requires_credential_environment() {
     let (store, api) = cloudflare_fixture_store(FixtureCredentialSource::missing());
-    let registration = OwnerOperation::RegisterAccount(Registration {
+    let registration = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
         credential: CredentialHandle::new("CLOUDFLARE_DNS_TOKEN"),
@@ -467,9 +467,9 @@ fn cloudflare_record_observation_requires_credential_environment() {
     .into_request();
     match store.handle_owner_request(registration) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(OwnerReply::RequestRejected(rejection)) => assert_eq!(
+            SubReply::Ok(MetaReply::RequestRejected(rejection)) => assert_eq!(
                 rejection.reason,
-                owner_signal_cloud::RejectionReason::CredentialHandleUnknown
+                meta_signal_cloud::RejectionReason::CredentialHandleUnknown
             ),
             other => panic!("unexpected registration reply {other:?}"),
         },
@@ -548,7 +548,7 @@ fn owner_policy_allows_approved_dns_plan_application() {
     let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
     configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
 
-    let plan_request = OwnerOperation::PreparePlan(PlanPreparation {
+    let plan_request = MetaOperation::PreparePlan(PlanPreparation {
         desired_state: signal_cloud::DesiredState {
             provider: Provider::Cloudflare,
             zone: DomainName::new("goldragon.criome"),
@@ -572,7 +572,7 @@ fn owner_policy_allows_approved_dns_plan_application() {
     .into_request();
     let plan = match store.handle_owner_request(plan_request) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(OwnerReply::PlanPrepared(plan)) => plan,
+            SubReply::Ok(MetaReply::PlanPrepared(plan)) => plan,
             other => panic!("unexpected plan reply {other:?}"),
         },
         other => panic!("unexpected plan frame reply {other:?}"),
@@ -581,7 +581,7 @@ fn owner_policy_allows_approved_dns_plan_application() {
     assert_eq!(plan.records_to_update.len(), 1);
     assert!(plan.record_names_to_delete.is_empty());
 
-    let approval = OwnerOperation::ApprovePlan(owner_signal_cloud::Approval {
+    let approval = MetaOperation::ApprovePlan(meta_signal_cloud::Approval {
         plan: plan.identifier.clone(),
     })
     .into_request();
@@ -590,13 +590,13 @@ fn owner_policy_allows_approved_dns_plan_application() {
         FrameReply::Accepted { .. }
     ));
 
-    let application = OwnerOperation::ApplyPlan(owner_signal_cloud::Application {
+    let application = MetaOperation::ApplyPlan(meta_signal_cloud::Application {
         plan: plan.identifier,
     })
     .into_request();
     match store.handle_owner_request(application) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(OwnerReply::PlanApplied(_)) => {}
+            SubReply::Ok(MetaReply::PlanApplied(_)) => {}
             other => panic!("unexpected apply reply {other:?}"),
         },
         other => panic!("unexpected apply frame reply {other:?}"),
@@ -632,7 +632,7 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
     let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
     configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
 
-    let plan_request = OwnerOperation::PrepareProjection(ProjectionPreparation {
+    let plan_request = MetaOperation::PrepareProjection(ProjectionPreparation {
         provider: Provider::Cloudflare,
         projection: Projection {
             query: ProjectionQuery {
@@ -650,7 +650,7 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
     .into_request();
     let plan = match store.handle_owner_request(plan_request) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(OwnerReply::PlanPrepared(plan)) => plan,
+            SubReply::Ok(MetaReply::PlanPrepared(plan)) => plan,
             other => panic!("unexpected projection plan reply {other:?}"),
         },
         other => panic!("unexpected projection plan frame reply {other:?}"),
@@ -659,7 +659,7 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
     assert_eq!(plan.records_to_update.len(), 1);
     assert_eq!(plan.records_to_update[0].proxy_mode, ProxyMode::Direct);
 
-    let approval = OwnerOperation::ApprovePlan(owner_signal_cloud::Approval {
+    let approval = MetaOperation::ApprovePlan(meta_signal_cloud::Approval {
         plan: plan.identifier.clone(),
     })
     .into_request();
@@ -668,13 +668,13 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
         FrameReply::Accepted { .. }
     ));
 
-    let application = OwnerOperation::ApplyPlan(owner_signal_cloud::Application {
+    let application = MetaOperation::ApplyPlan(meta_signal_cloud::Application {
         plan: plan.identifier,
     })
     .into_request();
     match store.handle_owner_request(application) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
-            SubReply::Ok(OwnerReply::PlanApplied(_)) => {}
+            SubReply::Ok(MetaReply::PlanApplied(_)) => {}
             other => panic!("unexpected projection apply reply {other:?}"),
         },
         other => panic!("unexpected projection apply frame reply {other:?}"),
@@ -706,27 +706,27 @@ fn daemon_answers_owner_registration_over_frame_socket() {
         Daemon::serve_owner_stream(&store, &mut daemon_stream).expect("daemon serves");
     });
 
-    let handshake = owner_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
+    let handshake = meta_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
         HandshakeRequest::current(),
     ));
-    OwnerFrameIo::write(&mut client_stream, &handshake).expect("write handshake");
-    let handshake_reply = OwnerFrameIo::read(&mut client_stream).expect("read handshake");
+    MetaFrameIo::write(&mut client_stream, &handshake).expect("write handshake");
+    let handshake_reply = MetaFrameIo::read(&mut client_stream).expect("read handshake");
     assert!(matches!(
         handshake_reply.into_body(),
         ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_))
     ));
 
-    let operation = OwnerOperation::RegisterAccount(Registration {
+    let operation = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
         credential: CredentialHandle::new("cloudflare-dns-token"),
     });
     let exchange = exchange();
     let request = operation.into_request();
-    let frame = owner_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-    OwnerFrameIo::write(&mut client_stream, &frame).expect("write request");
+    let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
+    MetaFrameIo::write(&mut client_stream, &frame).expect("write request");
 
-    let reply = OwnerFrameIo::read(&mut client_stream).expect("read reply");
+    let reply = MetaFrameIo::read(&mut client_stream).expect("read reply");
     match reply.into_body() {
         ExchangeFrameBody::Reply {
             exchange: reply_exchange,
@@ -735,7 +735,7 @@ fn daemon_answers_owner_registration_over_frame_socket() {
             assert_eq!(reply_exchange, exchange);
             assert!(matches!(
                 per_operation.head(),
-                SubReply::Ok(OwnerReply::AccountRegistered(_))
+                SubReply::Ok(MetaReply::AccountRegistered(_))
             ));
         }
         other => panic!("unexpected frame {other:?}"),

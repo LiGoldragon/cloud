@@ -53,17 +53,17 @@ impl OrdinaryFrameIo {
     }
 }
 
-pub struct OwnerFrameIo;
+pub struct MetaFrameIo;
 
-impl OwnerFrameIo {
-    pub fn read(reader: &mut impl Read) -> Result<owner_signal_cloud::Frame> {
+impl MetaFrameIo {
+    pub fn read(reader: &mut impl Read) -> Result<meta_signal_cloud::Frame> {
         let bytes = FrameBytes::read_from(reader)?;
-        Ok(owner_signal_cloud::Frame::decode_length_prefixed(
+        Ok(meta_signal_cloud::Frame::decode_length_prefixed(
             bytes.as_slice(),
         )?)
     }
 
-    pub fn write(writer: &mut impl Write, frame: &owner_signal_cloud::Frame) -> Result<()> {
+    pub fn write(writer: &mut impl Write, frame: &meta_signal_cloud::Frame) -> Result<()> {
         let bytes = frame.encode_length_prefixed()?;
         writer.write_all(&bytes)?;
         Ok(())

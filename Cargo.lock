@@ -87,9 +87,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 name = "cloud"
 version = "0.1.0"
 dependencies = [
+ "meta-signal-cloud",
  "nota-codec",
  "nota-config",
- "owner-signal-cloud",
  "rkyv",
  "schema-rust-next",
  "serde",
@@ -419,6 +419,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "meta-signal-cloud"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#aac64f068acc3c409af1b100052ea9e445491174"
+dependencies = [
+ "nota-codec",
+ "rkyv",
+ "schema-rust-next",
+ "signal-cloud",
+ "signal-domain-criome",
+ "signal-frame",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -502,18 +515,6 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
-
-[[package]]
-name = "owner-signal-cloud"
-version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/owner-signal-cloud.git?branch=main#927eb1652a5125fa7a53032e13f9e11cb30eaa8a"
-dependencies = [
- "nota-codec",
- "rkyv",
- "signal-cloud",
- "signal-domain-criome",
- "signal-frame",
-]
 
 [[package]]
 name = "paste"
@@ -732,7 +733,7 @@ dependencies = [
 [[package]]
 name = "schema-next"
 version = "0.1.1"
-source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#3f7813cfc7eecb45d372db57650d3558d1362f18"
+source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#b14d14f7eca58ca2c7104730ce71a7e523e0eb3d"
 dependencies = [
  "nota-next",
  "redb",
@@ -752,7 +753,7 @@ dependencies = [
 [[package]]
 name = "schema-rust-next"
 version = "0.1.3"
-source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#e25cc3eee37db3cd22341e368c8de69fa77ae27e"
+source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#c4fb5578871a7287973347962a21af71317cfbd2"
 dependencies = [
  "schema-next",
  "thiserror",
@@ -816,10 +817,11 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#eb93c663ff415db538d7aeed1fe53830f5594f50"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#5c201e1ffc5e7b76bc29e9a562583ffc332a13e1"
 dependencies = [
  "nota-codec",
  "rkyv",
+ "schema-rust-next",
  "signal-frame",
 ]
 

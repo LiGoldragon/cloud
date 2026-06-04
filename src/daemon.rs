@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use signal_frame::ExchangeFrameBody;
 
-use crate::frame_io::{OrdinaryFrameIo, OwnerFrameIo, handshake_reply_for};
+use crate::frame_io::{MetaFrameIo, OrdinaryFrameIo, handshake_reply_for};
 use crate::{DaemonConfiguration, Error, Result, Store};
 
 pub struct Daemon {
@@ -68,24 +68,24 @@ impl Daemon {
 
     pub fn serve_owner_stream(store: &Store, stream: &mut UnixStream) -> Result<()> {
         loop {
-            let frame = OwnerFrameIo::read(stream)?;
+            let frame = MetaFrameIo::read(stream)?;
             match frame.into_body() {
                 ExchangeFrameBody::HandshakeRequest(request) => {
-                    let reply = owner_signal_cloud::Frame::new(
-                        owner_signal_cloud::FrameBody::HandshakeReply(handshake_reply_for(
+                    let reply = meta_signal_cloud::Frame::new(
+                        meta_signal_cloud::FrameBody::HandshakeReply(handshake_reply_for(
                             request.version(),
                         )),
                     );
-                    OwnerFrameIo::write(stream, &reply)?;
+                    MetaFrameIo::write(stream, &reply)?;
                 }
                 ExchangeFrameBody::Request { exchange, request } => {
                     let reply = store.handle_owner_request(request);
                     let frame =
-                        owner_signal_cloud::Frame::new(owner_signal_cloud::FrameBody::Reply {
+                        meta_signal_cloud::Frame::new(meta_signal_cloud::FrameBody::Reply {
                             exchange,
                             reply,
                         });
-                    OwnerFrameIo::write(stream, &frame)?;
+                    MetaFrameIo::write(stream, &frame)?;
                     return Ok(());
                 }
                 _ => return Err(Error::UnexpectedFrame),
@@ -151,15 +151,15 @@ impl Daemon {
 
     fn serve_owner_stream_shared(store: &Arc<Mutex<Store>>, stream: &mut UnixStream) -> Result<()> {
         loop {
-            let frame = OwnerFrameIo::read(stream)?;
+            let frame = MetaFrameIo::read(stream)?;
             match frame.into_body() {
                 ExchangeFrameBody::HandshakeRequest(request) => {
-                    let reply = owner_signal_cloud::Frame::new(
-                        owner_signal_cloud::FrameBody::HandshakeReply(handshake_reply_for(
+                    let reply = meta_signal_cloud::Frame::new(
+                        meta_signal_cloud::FrameBody::HandshakeReply(handshake_reply_for(
                             request.version(),
                         )),
                     );
-                    OwnerFrameIo::write(stream, &reply)?;
+                    MetaFrameIo::write(stream, &reply)?;
                 }
                 ExchangeFrameBody::Request { exchange, request } => {
                     let reply = {
@@ -167,11 +167,11 @@ impl Daemon {
                         store.handle_owner_request(request)
                     };
                     let frame =
-                        owner_signal_cloud::Frame::new(owner_signal_cloud::FrameBody::Reply {
+                        meta_signal_cloud::Frame::new(meta_signal_cloud::FrameBody::Reply {
                             exchange,
                             reply,
                         });
-                    OwnerFrameIo::write(stream, &frame)?;
+                    MetaFrameIo::write(stream, &frame)?;
                     return Ok(());
                 }
                 _ => return Err(Error::UnexpectedFrame),
