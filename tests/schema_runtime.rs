@@ -17,8 +17,8 @@ fn ordinary_capability_observation_flows_through_generated_nexus_and_sema() {
     ));
 
     let nexus_action = runtime
-        .execute(
-            nexus::NexusWork::SignalArrived(nexus::SignalInput::OrdinaryInput(input))
+        .decide(
+            nexus::NexusWork::SignalArrived(nexus::SignalInput::OrdinaryInput(input.clone()))
                 .with_origin_route(nexus::OriginRoute(7)),
         )
         .into_root();
@@ -46,7 +46,7 @@ fn ordinary_capability_observation_flows_through_generated_nexus_and_sema() {
 
     let reply = runtime
         .execute(
-            nexus::NexusWork::SemaReadCompleted(sema_output)
+            nexus::NexusWork::SignalArrived(nexus::SignalInput::OrdinaryInput(input))
                 .with_origin_route(nexus::OriginRoute(8)),
         )
         .into_root();
@@ -69,9 +69,9 @@ fn meta_registration_flows_through_generated_nexus_and_sema() {
     };
 
     let nexus_action = runtime
-        .execute(
+        .decide(
             nexus::NexusWork::SignalArrived(nexus::SignalInput::MetaInput(
-                meta::Input::RegisterAccount(registration),
+                meta::Input::RegisterAccount(registration.clone()),
             ))
             .with_origin_route(nexus::OriginRoute(11)),
         )
@@ -84,21 +84,16 @@ fn meta_registration_flows_through_generated_nexus_and_sema() {
         other => panic!("expected SEMA write command, got {other:?}"),
     };
 
-    let sema_output = runtime
-        .apply(
-            sema::SemaWriteInput::RegisterAccount(sema_input)
-                .with_origin_route(sema::OriginRoute(11)),
+    let reply = runtime
+        .execute(
+            nexus::NexusWork::SignalArrived(nexus::SignalInput::MetaInput(
+                meta::Input::RegisterAccount(sema_input),
+            ))
+            .with_origin_route(nexus::OriginRoute(12)),
         )
         .into_root();
 
     assert_eq!(runtime.accounts().len(), 1);
-
-    let reply = runtime
-        .execute(
-            nexus::NexusWork::SemaWriteCompleted(sema_output)
-                .with_origin_route(nexus::OriginRoute(12)),
-        )
-        .into_root();
 
     match reply {
         nexus::NexusAction::ReplyToSignal(nexus::SignalOutput::MetaOutput(

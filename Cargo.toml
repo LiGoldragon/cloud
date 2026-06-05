@@ -24,10 +24,12 @@ default = ["cloudflare"]
 cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
 google-cloud = []
 hetzner = []
+nota-text = ["dep:nota-next"]
 
 [dependencies]
 nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
 nota-config       = { git = "https://github.com/LiGoldragon/nota-config.git", branch = "main" }
+nota-next         = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main", optional = true }
 meta-signal-cloud = { git = "https://github.com/LiGoldragon/meta-signal-cloud.git", branch = "main" }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
 signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
@@ -36,6 +38,7 @@ signal-frame        = { git = "https://github.com/LiGoldragon/signal-frame.git",
 serde             = { version = "1", features = ["derive"], optional = true }
 serde_json        = { version = "1", optional = true }
 thiserror         = "2"
+triad-runtime     = { git = "https://github.com/LiGoldragon/triad-runtime.git", branch = "main" }
 ureq              = { version = "2", features = ["json"], optional = true }
 
 [build-dependencies]

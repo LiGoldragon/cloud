@@ -297,6 +297,45 @@ impl SchemaRuntime {
 }
 
 impl nexus::NexusEngine for SchemaRuntime {
+    fn apply_sema_write(
+        &mut self,
+        _origin_route: nexus::OriginRoute,
+        input: nexus::CommandSemaWrite,
+    ) -> nexus::SemaWriteCompleted {
+        self.apply_sema(input)
+    }
+
+    fn observe_sema_read(
+        &self,
+        _origin_route: nexus::OriginRoute,
+        input: nexus::CommandSemaRead,
+    ) -> nexus::SemaReadCompleted {
+        self.observe_sema(input)
+    }
+
+    fn run_effect(&mut self, input: nexus::CommandEffect) -> nexus::EffectCompleted {
+        match input {
+            nexus::CommandEffect::CloudflareObserveZones(_) => {
+                nexus::EffectResult::ZonesObserved(ordinary::ZoneListing::new(Vec::new()))
+            }
+            nexus::CommandEffect::CloudflareObserveRecords(_) => {
+                nexus::EffectResult::RecordsObserved(ordinary::RecordListing::new(Vec::new()))
+            }
+            nexus::CommandEffect::CloudflareApplyPlan(identifier) => {
+                nexus::EffectResult::PlanApplied(meta::PlanApplied::new(identifier))
+            }
+        }
+    }
+
+    fn budget_exhausted_reply(
+        &self,
+        _exhausted: triad_runtime::ContinuationExhausted,
+    ) -> nexus::ReplyToSignal {
+        nexus::SignalOutput::OrdinaryOutput(ordinary::Output::RequestRejected(
+            ordinary::RejectedRequest(ordinary::RejectionReason::PlanExpired),
+        ))
+    }
+
     fn decide(
         &mut self,
         input: nexus::nexus::Nexus<nexus::nexus::Work>,

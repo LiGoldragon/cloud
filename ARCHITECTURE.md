@@ -108,9 +108,10 @@ sema-engine persistence belong in the `cloud` runtime crate.
 daemon runtime schemas: `schema/nexus.schema` targets `NexusRuntime`, and
 `schema/sema.schema` targets `SemaRuntime`. The build consumes the ordinary
 `signal-cloud` schema directory and the meta `meta-signal-cloud` schema
-directory from Cargo metadata, then freshness-checks `schema/*.asschema` and
-`src/schema/{nexus,sema}.rs`. The daemon must not hard-code local checkout
-paths for contract schemas.
+directory from Cargo metadata, validates each authored schema as a
+`SchemaSource` object through text and rkyv round-trips, then
+freshness-checks `src/schema/{nexus,sema}.rs`. The daemon must not hard-code
+local checkout paths for contract schemas.
 
 `src/schema_runtime.rs` is the first fresh implementation slice over those
 generated planes. It implements the generated Nexus and SEMA engine traits for
