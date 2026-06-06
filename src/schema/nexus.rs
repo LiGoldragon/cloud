@@ -21,9 +21,7 @@ pub use meta_signal_cloud::schema::lib::PlanIdentifier as PlanIdentifier;
 pub use meta_signal_cloud::schema::lib::PlanApplied as PlanApplied;
 
 #[cfg(feature = "nota-text")]
-pub use nota_next::{
-    NotaDecode, NotaDecodeError, NotaEncode, NotaSource,
-};
+pub use nota_next::{NotaDecode, NotaDecodeError, NotaEncode, NotaSource};
 
 pub type SignalArrived = SignalInput;
 
@@ -118,7 +116,6 @@ impl SignalInput {
     pub fn ordinary_input(payload: OrdinaryInput) -> Self {
         Self::OrdinaryInput(payload)
     }
-
     pub fn meta_input(payload: MetaInput) -> Self {
         Self::MetaInput(payload)
     }
@@ -128,7 +125,6 @@ impl SignalOutput {
     pub fn ordinary_output(payload: OrdinaryOutput) -> Self {
         Self::OrdinaryOutput(payload)
     }
-
     pub fn meta_output(payload: MetaOutput) -> Self {
         Self::MetaOutput(payload)
     }
@@ -138,11 +134,9 @@ impl EffectCommand {
     pub fn cloudflare_observe_zones(payload: CloudflareObserveZones) -> Self {
         Self::CloudflareObserveZones(payload)
     }
-
     pub fn cloudflare_observe_records(payload: CloudflareObserveRecords) -> Self {
         Self::CloudflareObserveRecords(payload)
     }
-
     pub fn cloudflare_apply_plan(payload: CloudflareApplyPlan) -> Self {
         Self::CloudflareApplyPlan(payload)
     }
@@ -152,11 +146,9 @@ impl EffectResult {
     pub fn zones_observed(payload: ZonesObserved) -> Self {
         Self::ZonesObserved(payload)
     }
-
     pub fn records_observed(payload: RecordsObserved) -> Self {
         Self::RecordsObserved(payload)
     }
-
     pub fn plan_applied(payload: PlanApplied) -> Self {
         Self::PlanApplied(payload)
     }
@@ -166,15 +158,12 @@ impl NexusWork {
     pub fn signal_arrived(payload: SignalArrived) -> Self {
         Self::SignalArrived(payload)
     }
-
     pub fn sema_read_completed(payload: SemaReadCompleted) -> Self {
         Self::SemaReadCompleted(payload)
     }
-
     pub fn sema_write_completed(payload: SemaWriteCompleted) -> Self {
         Self::SemaWriteCompleted(payload)
     }
-
     pub fn effect_completed(payload: EffectCompleted) -> Self {
         Self::EffectCompleted(payload)
     }
@@ -184,19 +173,15 @@ impl NexusAction {
     pub fn command_sema_read(payload: CommandSemaRead) -> Self {
         Self::CommandSemaRead(payload)
     }
-
     pub fn command_sema_write(payload: CommandSemaWrite) -> Self {
         Self::CommandSemaWrite(payload)
     }
-
     pub fn command_effect(payload: CommandEffect) -> Self {
         Self::CommandEffect(payload)
     }
-
     pub fn reply_to_signal(payload: ReplyToSignal) -> Self {
         Self::ReplyToSignal(payload)
     }
-
     pub fn r#continue(payload: Continue) -> Self {
         Self::Continue(payload)
     }
@@ -261,7 +246,6 @@ impl SignalInput {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -272,7 +256,6 @@ impl SignalOutput {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -283,7 +266,6 @@ impl EffectCommand {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -294,7 +276,6 @@ impl EffectResult {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -305,7 +286,6 @@ impl NexusWork {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -316,7 +296,6 @@ impl NexusAction {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -327,7 +306,6 @@ impl Input {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -336,12 +314,10 @@ impl Input {
 #[cfg(feature = "nota-text")]
 impl std::str::FromStr for Input {
     type Err = NotaDecodeError;
-
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         NotaSource::new(source).parse::<Self>()
     }
 }
-
 #[cfg(feature = "nota-text")]
 impl std::fmt::Display for Input {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -354,7 +330,6 @@ impl Output {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(&self) -> String {
         <Self as NotaEncode>::to_nota(self)
     }
@@ -363,12 +338,10 @@ impl Output {
 #[cfg(feature = "nota-text")]
 impl std::str::FromStr for Output {
     type Err = NotaDecodeError;
-
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         NotaSource::new(source).parse::<Self>()
     }
 }
-
 #[cfg(feature = "nota-text")]
 impl std::fmt::Display for Output {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -376,144 +349,17 @@ impl std::fmt::Display for Output {
     }
 }
 
-pub mod short_header {
-    pub const INPUT_NEXUS_WORK: u64 = 0x0000000000000000;
-    pub const OUTPUT_NEXUS_ACTION: u64 = 0x0100000000000000;
-}
-
-const SIGNAL_SHORT_HEADER_BYTE_COUNT: usize = 8;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SignalFrameError {
-    ArchiveEncode,
-    ArchiveDecode,
-    FrameTooShort { found: usize },
-    UnknownHeader { root_enum: &'static str, header: u64 },
-    HeaderMismatch { expected: u64, found: u64 },
-}
-
-impl std::fmt::Display for SignalFrameError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ArchiveEncode => formatter.write_str("failed to encode rkyv archive"),
-            Self::ArchiveDecode => formatter.write_str("failed to decode rkyv archive"),
-            Self::FrameTooShort { found } => write!(formatter, "signal frame too short: {found} bytes"),
-            Self::UnknownHeader { root_enum, header } => write!(formatter, "unknown {root_enum} short header 0x{header:016X}"),
-            Self::HeaderMismatch { expected, found } => write!(formatter, "decoded payload header mismatch: expected 0x{expected:016X}, found 0x{found:016X}"),
-        }
-    }
-}
-
-impl std::error::Error for SignalFrameError {}
-
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InputRoute {
-    NexusWork,
-}
-
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutputRoute {
-    NexusAction,
-}
-
-impl Input {
-    pub fn route(&self) -> InputRoute {
-        match self {
-            Self::NexusWork(_) => InputRoute::NexusWork,
-        }
-    }
-
-    pub fn short_header(&self) -> u64 {
-        match self {
-            Self::NexusWork(_) => short_header::INPUT_NEXUS_WORK,
-        }
-    }
-
-    pub fn route_from_short_header(header: u64) -> Result<InputRoute, SignalFrameError> {
-        match header {
-            short_header::INPUT_NEXUS_WORK => Ok(InputRoute::NexusWork),
-            _ => Err(SignalFrameError::UnknownHeader { root_enum: "Input", header }),
-        }
-    }
-
-    pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {
-        let archive = rkyv::to_bytes::<rkyv::rancor::Error>(self)
-            .map_err(|_| SignalFrameError::ArchiveEncode)?;
-        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());
-        frame.extend_from_slice(&self.short_header().to_le_bytes());
-        frame.extend_from_slice(&archive);
-        Ok(frame)
-    }
-
-    pub fn decode_signal_frame(frame: &[u8]) -> Result<(InputRoute, Self), SignalFrameError> {
-        if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {
-            return Err(SignalFrameError::FrameTooShort { found: frame.len() });
-        }
-        let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];
-        header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);
-        let header = u64::from_le_bytes(header_bytes);
-        let route = Self::route_from_short_header(header)?;
-        let value = rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
-            .map_err(|_| SignalFrameError::ArchiveDecode)?;
-        let expected = value.short_header();
-        if expected != header {
-            return Err(SignalFrameError::HeaderMismatch { expected, found: header });
-        }
-        Ok((route, value))
-    }
-}
-
-impl Output {
-    pub fn route(&self) -> OutputRoute {
-        match self {
-            Self::NexusAction(_) => OutputRoute::NexusAction,
-        }
-    }
-
-    pub fn short_header(&self) -> u64 {
-        match self {
-            Self::NexusAction(_) => short_header::OUTPUT_NEXUS_ACTION,
-        }
-    }
-
-    pub fn route_from_short_header(header: u64) -> Result<OutputRoute, SignalFrameError> {
-        match header {
-            short_header::OUTPUT_NEXUS_ACTION => Ok(OutputRoute::NexusAction),
-            _ => Err(SignalFrameError::UnknownHeader { root_enum: "Output", header }),
-        }
-    }
-
-    pub fn encode_signal_frame(&self) -> Result<Vec<u8>, SignalFrameError> {
-        let archive = rkyv::to_bytes::<rkyv::rancor::Error>(self)
-            .map_err(|_| SignalFrameError::ArchiveEncode)?;
-        let mut frame = Vec::with_capacity(SIGNAL_SHORT_HEADER_BYTE_COUNT + archive.len());
-        frame.extend_from_slice(&self.short_header().to_le_bytes());
-        frame.extend_from_slice(&archive);
-        Ok(frame)
-    }
-
-    pub fn decode_signal_frame(frame: &[u8]) -> Result<(OutputRoute, Self), SignalFrameError> {
-        if frame.len() < SIGNAL_SHORT_HEADER_BYTE_COUNT {
-            return Err(SignalFrameError::FrameTooShort { found: frame.len() });
-        }
-        let mut header_bytes = [0_u8; SIGNAL_SHORT_HEADER_BYTE_COUNT];
-        header_bytes.copy_from_slice(&frame[..SIGNAL_SHORT_HEADER_BYTE_COUNT]);
-        let header = u64::from_le_bytes(header_bytes);
-        let route = Self::route_from_short_header(header)?;
-        let value = rkyv::from_bytes::<Self, rkyv::rancor::Error>(&frame[SIGNAL_SHORT_HEADER_BYTE_COUNT..])
-            .map_err(|_| SignalFrameError::ArchiveDecode)?;
-        let expected = value.short_header();
-        if expected != header {
-            return Err(SignalFrameError::HeaderMismatch { expected, found: header });
-        }
-        Ok((route, value))
-    }
-}
-
-#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum NexusWorkRoute {
     SignalArrived,
     SemaReadCompleted,
@@ -533,7 +379,16 @@ impl NexusWork {
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum NexusActionRoute {
     CommandSemaRead,
     CommandSemaWrite,
@@ -555,7 +410,16 @@ impl NexusAction {
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum NexusObjectName {
     Work(NexusWorkRoute),
     Action(NexusActionRoute),
@@ -564,23 +428,26 @@ pub enum NexusObjectName {
     Entered,
     Decided,
 }
-
 impl NexusObjectName {
     pub fn name(self) -> &'static str {
         match self {
-            Self::Work(route) => match route {
-                NexusWorkRoute::SignalArrived => "NexusWorkSignalArrived",
-                NexusWorkRoute::SemaReadCompleted => "NexusWorkSemaReadCompleted",
-                NexusWorkRoute::SemaWriteCompleted => "NexusWorkSemaWriteCompleted",
-                NexusWorkRoute::EffectCompleted => "NexusWorkEffectCompleted",
-            },
-            Self::Action(route) => match route {
-                NexusActionRoute::CommandSemaRead => "NexusActionCommandSemaRead",
-                NexusActionRoute::CommandSemaWrite => "NexusActionCommandSemaWrite",
-                NexusActionRoute::CommandEffect => "NexusActionCommandEffect",
-                NexusActionRoute::ReplyToSignal => "NexusActionReplyToSignal",
-                NexusActionRoute::Continue => "NexusActionContinue",
-            },
+            Self::Work(route) => {
+                match route {
+                    NexusWorkRoute::SignalArrived => "NexusWorkSignalArrived",
+                    NexusWorkRoute::SemaReadCompleted => "NexusWorkSemaReadCompleted",
+                    NexusWorkRoute::SemaWriteCompleted => "NexusWorkSemaWriteCompleted",
+                    NexusWorkRoute::EffectCompleted => "NexusWorkEffectCompleted",
+                }
+            }
+            Self::Action(route) => {
+                match route {
+                    NexusActionRoute::CommandSemaRead => "NexusActionCommandSemaRead",
+                    NexusActionRoute::CommandSemaWrite => "NexusActionCommandSemaWrite",
+                    NexusActionRoute::CommandEffect => "NexusActionCommandEffect",
+                    NexusActionRoute::ReplyToSignal => "NexusActionReplyToSignal",
+                    NexusActionRoute::Continue => "NexusActionContinue",
+                }
+            }
             Self::Started => "NexusStarted",
             Self::Stopped => "NexusStopped",
             Self::Entered => "NexusEntered",
@@ -590,15 +457,31 @@ impl NexusObjectName {
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum ObjectName {
     Nexus(NexusObjectName),
 }
-
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub struct TraceEvent(pub ObjectName);
-
 impl ObjectName {
     pub fn name(self) -> &'static str {
         match self {
@@ -606,30 +489,35 @@ impl ObjectName {
         }
     }
 }
-
 impl TraceEvent {
     pub fn new(object_name: ObjectName) -> Self {
         Self(object_name)
     }
-
     pub fn object_name(&self) -> ObjectName {
         self.0
     }
-
     pub fn name(&self) -> &'static str {
         self.0.name()
     }
 }
 
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub struct OriginRoute(pub Integer);
 #[cfg(feature = "nota-text")]
 impl OriginRoute {
     pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
         <Self as NotaDecode>::from_nota_block(block)
     }
-
     pub fn to_nota(self) -> String {
         <Self as NotaEncode>::to_nota(&self)
     }
@@ -640,25 +528,23 @@ pub struct Nexus<Root> {
     pub origin_route: OriginRoute,
     pub root: Root,
 }
-
 impl<Root> Nexus<Root> {
     pub fn new(origin_route: OriginRoute, root: Root) -> Self {
         Self { origin_route, root }
     }
-
     pub fn origin_route(&self) -> OriginRoute {
         self.origin_route
     }
-
     pub fn root(&self) -> &Root {
         &self.root
     }
-
     pub fn into_root(self) -> Root {
         self.root
     }
-
-    pub fn map_root<NextRoot>(self, map: impl FnOnce(Root) -> NextRoot) -> Nexus<NextRoot> {
+    pub fn map_root<NextRoot>(
+        self,
+        map: impl FnOnce(Root) -> NextRoot,
+    ) -> Nexus<NextRoot> {
         Nexus::new(self.origin_route, map(self.root))
     }
 }
@@ -682,44 +568,63 @@ impl NexusAction {
     }
 }
 
+impl triad_runtime::NexusWork for NexusWork {}
+
+impl triad_runtime::NexusEffectCommand for CommandEffect {}
+
+impl triad_runtime::NexusEffectResult for EffectCompleted {}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActorStartFailure {
     ResourceBusy(String),
     ConfigurationInvalid(String),
 }
-
 impl std::fmt::Display for ActorStartFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ResourceBusy(message) => write!(formatter, "actor resource busy: {message}"),
-            Self::ConfigurationInvalid(message) => write!(formatter, "actor configuration invalid: {message}"),
+            Self::ResourceBusy(message) => {
+                write!(formatter, "actor resource busy: {message}")
+            }
+            Self::ConfigurationInvalid(message) => {
+                write!(formatter, "actor configuration invalid: {message}")
+            }
         }
     }
 }
-
 impl std::error::Error for ActorStartFailure {}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActorStopFailure {
     ResourceLocked(String),
     ChildStillRunning(String),
 }
-
 impl std::fmt::Display for ActorStopFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ResourceLocked(message) => write!(formatter, "actor resource locked: {message}"),
-            Self::ChildStillRunning(message) => write!(formatter, "actor child still running: {message}"),
+            Self::ResourceLocked(message) => {
+                write!(formatter, "actor resource locked: {message}")
+            }
+            Self::ChildStillRunning(message) => {
+                write!(formatter, "actor child still running: {message}")
+            }
         }
     }
 }
-
 impl std::error::Error for ActorStopFailure {}
 
-pub type NexusRunnerNextStep = triad_runtime::NextStep<ReplyToSignal, CommandSemaWrite, CommandSemaRead, CommandEffect, NexusWork>;
-
-impl NexusAction {
-    pub fn into_runner_next_step(self) -> NexusRunnerNextStep {
+pub type NexusRunnerNextStep = triad_runtime::NextStep<
+    ReplyToSignal,
+    CommandSemaWrite,
+    CommandSemaRead,
+    CommandEffect,
+    NexusWork,
+>;
+impl triad_runtime::NexusAction for NexusAction {
+    type Reply = ReplyToSignal;
+    type SemaWrite = CommandSemaWrite;
+    type SemaRead = CommandSemaRead;
+    type Effect = CommandEffect;
+    type Work = NexusWork;
+    fn into_next_step(self) -> NexusRunnerNextStep {
         match self {
             Self::CommandSemaWrite(input) => triad_runtime::NextStep::SemaWrite(input),
             Self::CommandSemaRead(input) => triad_runtime::NextStep::SemaRead(input),
@@ -737,7 +642,6 @@ pub trait NexusEngine {
     fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
         Ok(())
     }
-
     fn trace_nexus_activation(&self, _object_name: NexusObjectName) {}
     fn trace_nexus_entered(&self) {
         self.trace_nexus_activation(NexusObjectName::Entered);
@@ -745,19 +649,32 @@ pub trait NexusEngine {
     fn trace_nexus_decided(&self) {
         self.trace_nexus_activation(NexusObjectName::Decided);
     }
-
     fn continuation_limit(&self) -> triad_runtime::ContinuationLimit {
         triad_runtime::ContinuationLimit::default()
     }
-
-    fn apply_sema_write(&mut self, origin_route: OriginRoute, input: CommandSemaWrite) -> SemaWriteCompleted;
-    fn observe_sema_read(&self, origin_route: OriginRoute, input: CommandSemaRead) -> SemaReadCompleted;
+    fn apply_sema_write(
+        &mut self,
+        origin_route: OriginRoute,
+        input: CommandSemaWrite,
+    ) -> SemaWriteCompleted;
+    fn observe_sema_read(
+        &self,
+        origin_route: OriginRoute,
+        input: CommandSemaRead,
+    ) -> SemaReadCompleted;
     fn run_effect(&mut self, input: CommandEffect) -> EffectCompleted;
-    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> ReplyToSignal;
-
-    fn decide(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>;
-
-    fn execute(&mut self, input: nexus::Nexus<nexus::Work>) -> nexus::Nexus<nexus::Action>
+    fn budget_exhausted_reply(
+        &self,
+        exhausted: triad_runtime::ContinuationExhausted,
+    ) -> ReplyToSignal;
+    fn decide(
+        &mut self,
+        input: nexus::Nexus<nexus::Work>,
+    ) -> nexus::Nexus<nexus::Action>;
+    fn execute(
+        &mut self,
+        input: nexus::Nexus<nexus::Work>,
+    ) -> nexus::Nexus<nexus::Action>
     where
         Self: Sized,
     {
@@ -777,14 +694,13 @@ struct NexusRunnerAdapter<'engine, Engine> {
     engine: &'engine mut Engine,
     origin_route: OriginRoute,
 }
-
 impl<'engine, Engine> NexusRunnerAdapter<'engine, Engine> {
     fn new(engine: &'engine mut Engine, origin_route: OriginRoute) -> Self {
         Self { engine, origin_route }
     }
 }
-
-impl<'engine, Engine> triad_runtime::RunnerEngines for NexusRunnerAdapter<'engine, Engine>
+impl<'engine, Engine> triad_runtime::RunnerEngines
+for NexusRunnerAdapter<'engine, Engine>
 where
     Engine: NexusEngine,
 {
@@ -793,42 +709,55 @@ where
     type SemaRead = CommandSemaRead;
     type Effect = CommandEffect;
     type Work = NexusWork;
-
-    fn decide_next_step(&mut self, work: Self::Work) -> triad_runtime::runner::RunnerNextStep<Self> {
-        let action = NexusEngine::decide(self.engine, work.with_origin_route(self.origin_route)).into_root();
-        action.into_runner_next_step()
+    fn decide_next_step(
+        &mut self,
+        work: Self::Work,
+    ) -> triad_runtime::runner::RunnerNextStep<Self> {
+        let action = NexusEngine::decide(
+                self.engine,
+                work.with_origin_route(self.origin_route),
+            )
+            .into_root();
+        triad_runtime::NexusAction::into_next_step(action)
     }
-
     fn apply_sema_write(&mut self, write: Self::SemaWrite) -> Self::Work {
-        let output: SemaWriteCompleted = NexusEngine::apply_sema_write(self.engine, self.origin_route, write);
+        let output: SemaWriteCompleted = NexusEngine::apply_sema_write(
+            self.engine,
+            self.origin_route,
+            write,
+        );
         NexusWork::sema_write_completed(output)
     }
-
     fn observe_sema_read(&self, read: Self::SemaRead) -> Self::Work {
-        let output: SemaReadCompleted = NexusEngine::observe_sema_read(self.engine, self.origin_route, read);
+        let output: SemaReadCompleted = NexusEngine::observe_sema_read(
+            self.engine,
+            self.origin_route,
+            read,
+        );
         NexusWork::sema_read_completed(output)
     }
-
     fn run_effect(&mut self, effect: Self::Effect) -> Self::Work {
         let output: EffectCompleted = NexusEngine::run_effect(self.engine, effect);
         NexusWork::effect_completed(output)
     }
-
-    fn budget_exhausted_reply(&self, exhausted: triad_runtime::ContinuationExhausted) -> Self::Reply {
+    fn budget_exhausted_reply(
+        &self,
+        exhausted: triad_runtime::ContinuationExhausted,
+    ) -> Self::Reply {
         NexusEngine::budget_exhausted_reply(self.engine, exhausted)
     }
 }
 
 pub trait UpgradeFrom<Previous>: Sized {
     type Error;
-
     fn upgrade_from(previous: Previous) -> Result<Self, Self::Error>;
 }
-
 pub trait AcceptPrevious<Previous>: UpgradeFrom<Previous> {
     fn accept_previous(previous: Previous) -> Result<Self, Self::Error> {
         Self::upgrade_from(previous)
     }
 }
-
-impl<Current, Previous> AcceptPrevious<Previous> for Current where Current: UpgradeFrom<Previous> {}
+impl<Current, Previous> AcceptPrevious<Previous> for Current
+where
+    Current: UpgradeFrom<Previous>,
+{}

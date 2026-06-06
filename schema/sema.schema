@@ -34,16 +34,16 @@
 [SemaReadInput SemaWriteInput]
 [SemaReadOutput SemaWriteOutput]
 {
-  SemaReadInput [Observe ObservePlan Validate]
+  SemaReadInput [(Observe Observe) (ObservePlan ObservePlan) (Validate Validate)]
   Observe Observation
   ObservePlan PlanQuery
   Validate Validation
 
-  SemaReadOutput [(Observed Observed) (Validated Validated) PlanObserved Missed]
+  SemaReadOutput [(Observed Observed) (Validated Validated) (PlanObserved PlanObserved) (Missed Missed)]
   PlanObserved PlanResult
   Missed RejectionReport
 
-  SemaWriteInput [RegisterAccount RotateCredential SetPolicy PreparePlan PrepareProjection ApprovePlan ApplyPlan RetireAccount]
+  SemaWriteInput [(RegisterAccount RegisterAccount) (RotateCredential RotateCredential) (SetPolicy SetPolicy) (PreparePlan PreparePlan) (PrepareProjection PrepareProjection) (ApprovePlan ApprovePlan) (ApplyPlan ApplyPlan) (RetireAccount RetireAccount)]
   RegisterAccount Registration
   RotateCredential Rotation
   SetPolicy Policy

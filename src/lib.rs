@@ -34,7 +34,6 @@ pub mod daemon;
 pub mod frame_io;
 pub mod schema;
 pub mod schema_daemon;
-pub mod schema_role;
 pub mod schema_runtime;
 pub mod schema_store;
 
@@ -48,6 +47,9 @@ pub enum Error {
 
     #[error("length-prefixed frame error: {0}")]
     LengthPrefixedFrame(#[from] triad_runtime::FrameError),
+
+    #[error("listener error: {0}")]
+    Listener(#[from] triad_runtime::ListenerError),
 
     #[error("ordinary signal frame error: {0}")]
     OrdinaryFrame(signal_cloud::schema::lib::SignalFrameError),
@@ -125,6 +127,29 @@ pub struct DaemonConfiguration {
 }
 
 nota_config::impl_rkyv_configuration!(DaemonConfiguration);
+
+impl triad_runtime::DaemonConfiguration for DaemonConfiguration {
+    fn socket_path(&self) -> &Path {
+        Path::new(&self.ordinary_socket_path)
+    }
+
+    fn meta_socket_path(&self) -> Option<&Path> {
+        Some(Path::new(&self.owner_socket_path))
+    }
+
+    /// cloud's schema engine holds its account / plan tables in an in-memory
+    /// `SchemaStore` for this slice (durable redb backing is the noted
+    /// follow-on), so no durable database path is opened — `build_runtime`
+    /// ignores it. The trait requires the method, so it returns an empty
+    /// placeholder path until the durable store lands.
+    fn database_path(&self) -> &Path {
+        Path::new("")
+    }
+
+    fn meta_socket_mode(&self) -> Option<triad_runtime::SocketMode> {
+        Some(triad_runtime::SocketMode::new(self.owner_socket_mode))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountBinding {

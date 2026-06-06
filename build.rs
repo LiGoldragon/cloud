@@ -1,6 +1,15 @@
 use std::{env, path::PathBuf};
 
-use schema_rust_next::build::{DependencySchema, GenerationDriver, GenerationPlan};
+use schema_rust_next::{
+    MetaListenerTier, NexusDaemonShape, SocketModeBits, WorkingListenerTier,
+    build::{DependencySchema, GenerationDriver, GenerationPlan, ModuleEmission},
+};
+
+/// The owner-only file mode for the meta socket — the fallback the shape
+/// carries when a configuration omits its own `owner_socket_mode`. `0o600`
+/// keeps the policy / plan tier owner-only, matching the security partition in
+/// system-designer report 76 (the meta tier is the owner-only door).
+const OWNER_ONLY_SOCKET_MODE: u32 = 0o600;
 
 fn main() {
     SchemaBuild::from_environment().run();
@@ -22,6 +31,7 @@ impl SchemaBuild {
         println!("cargo:rerun-if-changed=schema/sema.schema");
         println!("cargo:rerun-if-changed=src/schema/nexus.rs");
         println!("cargo:rerun-if-changed=src/schema/sema.rs");
+        println!("cargo:rerun-if-changed=src/schema/daemon.rs");
 
         let dependencies = ContractSchemaDependencies::from_environment();
         dependencies.emit_rerun_instructions();
@@ -76,13 +86,32 @@ impl ContractSchemaDependencies {
             (Some(ordinary_signal), Some(meta_signal)) => Some(
                 GenerationPlan::daemon_runtime(crate_root, crate_name, version)
                     .with_dependency_schema(ordinary_signal)
-                    .with_dependency_schema(meta_signal),
+                    .with_dependency_schema(meta_signal)
+                    .with_module(ModuleEmission::daemon_module("nexus", Self::daemon_shape())),
             ),
             (ordinary_signal, meta_signal) => {
                 MissingContractSchemas::new(ordinary_signal, meta_signal).warn_and_skip();
                 None
             }
         }
+    }
+
+    /// cloud's daemon shape: the `cloud-daemon` process bound to two
+    /// authority-tiered listeners. The peer-callable working tier's
+    /// `Input` / `Output` roots live in the dependency crate `signal-cloud`
+    /// (cloud's triad keeps the ordinary contract there, so the tier is a
+    /// dependency contract imported as `signal_cloud::schema::lib`, not a
+    /// locally emitted module). The owner-only meta tier's contract lives in
+    /// `meta-signal-cloud`; it is a full escape hatch decoded by
+    /// `handle_meta_stream`. The daemon module reads stream declarations from
+    /// the local `nexus` schema (cloud declares no stream), so no streaming
+    /// plumbing is emitted.
+    fn daemon_shape() -> NexusDaemonShape {
+        NexusDaemonShape::new(
+            "cloud-daemon",
+            WorkingListenerTier::dependency("signal_cloud::schema::lib"),
+        )
+        .with_meta_tier(MetaListenerTier::new(SocketModeBits::new(OWNER_ONLY_SOCKET_MODE)))
     }
 }
 

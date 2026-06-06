@@ -17,6 +17,7 @@ use std::sync::Arc;
 use meta_signal_cloud::schema::lib as meta;
 use signal_cloud::schema::lib as ordinary;
 
+use crate::schema::nexus::NexusEngine;
 use crate::schema::{nexus, sema};
 use crate::schema_store::{ProviderProjection, SchemaStore};
 
@@ -58,6 +59,30 @@ impl SchemaRuntime {
             store: Arc::new(SchemaStore::new()),
             capabilities,
             policy: None,
+        }
+    }
+
+    /// Drive one arriving signal to its reply `SignalOutput` over a SHARED
+    /// `Store`. The daemon builds one fresh `SchemaRuntime` per request from the
+    /// shared `Arc<SchemaStore>` (the per-request engine model, intent 2alg),
+    /// runs the Nexus continuation to its terminal `ReplyToSignal`, and returns
+    /// the reply. A non-reply terminal action is a runtime-invariant violation;
+    /// it surfaces as an ordinary `PlanExpired` rejection to the caller. This is
+    /// the per-request execute the emitted daemon's `handle_working_input` /
+    /// `handle_meta_stream` hooks call — it lives on the engine noun, not the
+    /// ZST daemon marker.
+    pub fn reply_to_signal(
+        store: Arc<SchemaStore>,
+        signal_input: nexus::SignalInput,
+    ) -> nexus::SignalOutput {
+        let mut engine = Self::with_store(store);
+        let work =
+            nexus::NexusWork::SignalArrived(signal_input).with_origin_route(nexus::OriginRoute(0));
+        match engine.execute(work).into_root() {
+            nexus::NexusAction::ReplyToSignal(output) => output,
+            _ => nexus::SignalOutput::OrdinaryOutput(ordinary::Output::RequestRejected(
+                ordinary::RejectedRequest(ordinary::RejectionReason::PlanExpired),
+            )),
         }
     }
 

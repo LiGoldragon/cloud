@@ -37,14 +37,14 @@
   SignalInput [(OrdinaryInput OrdinaryInput) (MetaInput MetaInput)]
   SignalOutput [(OrdinaryOutput OrdinaryOutput) (MetaOutput MetaOutput)]
 
-  EffectCommand [CloudflareObserveZones CloudflareObserveRecords CloudflareApplyPlan]
+  EffectCommand [(CloudflareObserveZones CloudflareObserveZones) (CloudflareObserveRecords CloudflareObserveRecords) (CloudflareApplyPlan CloudflareApplyPlan)]
   CloudflareObserveZones ZoneQuery
   CloudflareObserveRecords RecordQuery
   CloudflareApplyPlan PlanIdentifier
-  EffectResult [ZonesObserved RecordsObserved (PlanApplied PlanApplied)]
+  EffectResult [(ZonesObserved ZonesObserved) (RecordsObserved RecordsObserved) (PlanApplied PlanApplied)]
   ZonesObserved ZoneListing
   RecordsObserved RecordListing
 
-  NexusWork [SignalArrived SemaReadCompleted SemaWriteCompleted EffectCompleted]
-  NexusAction [CommandSemaRead CommandSemaWrite CommandEffect ReplyToSignal Continue]
+  NexusWork [(SignalArrived SignalArrived) (SemaReadCompleted SemaReadCompleted) (SemaWriteCompleted SemaWriteCompleted) (EffectCompleted EffectCompleted)]
+  NexusAction [(CommandSemaRead CommandSemaRead) (CommandSemaWrite CommandSemaWrite) (CommandEffect CommandEffect) (ReplyToSignal ReplyToSignal) (Continue Continue)]
 }
