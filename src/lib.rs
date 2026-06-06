@@ -33,7 +33,10 @@ pub mod cloudflare_cli;
 pub mod daemon;
 pub mod frame_io;
 pub mod schema;
+pub mod schema_daemon;
+pub mod schema_role;
 pub mod schema_runtime;
+pub mod schema_store;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -42,6 +45,15 @@ pub enum Error {
 
     #[error("signal frame error: {0}")]
     Frame(#[from] signal_frame::FrameError),
+
+    #[error("length-prefixed frame error: {0}")]
+    LengthPrefixedFrame(#[from] triad_runtime::FrameError),
+
+    #[error("ordinary signal frame error: {0}")]
+    OrdinaryFrame(signal_cloud::schema::lib::SignalFrameError),
+
+    #[error("meta signal frame error: {0}")]
+    MetaFrame(meta_signal_cloud::schema::lib::SignalFrameError),
 
     #[error("command-line route error: {0}")]
     CommandLineRoute(#[from] signal_frame::CommandLineRouteError),
@@ -89,6 +101,18 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl Error {
     pub fn command_line_route(error: signal_frame::CommandLineRouteError) -> Self {
         Self::CommandLineRoute(error)
+    }
+}
+
+impl From<signal_cloud::schema::lib::SignalFrameError> for Error {
+    fn from(error: signal_cloud::schema::lib::SignalFrameError) -> Self {
+        Self::OrdinaryFrame(error)
+    }
+}
+
+impl From<meta_signal_cloud::schema::lib::SignalFrameError> for Error {
+    fn from(error: meta_signal_cloud::schema::lib::SignalFrameError) -> Self {
+        Self::MetaFrame(error)
     }
 }
 

@@ -1,14 +1,34 @@
+//! Hand-implemented `SchemaRuntime` noun — the single data-bearing type that
+//! implements both schema-engine traits (`nexus::NexusEngine` +
+//! `sema::SemaEngine`) over a durable [`SchemaStore`].
+//!
+//! `decide` is the routing brain: ordinary observation/validation requests route
+//! to `SemaRead`, meta registration/policy/plan mutations route to `SemaWrite`,
+//! and the SEMA completions turn back into ordinary / meta Signal replies. The
+//! account and plan state lives in the shared `Arc<SchemaStore>` (the two
+//! schema-emitted SEMA tables), so each request is served by its own
+//! `SchemaRuntime` over a clone of that handle while the durable tables are
+//! shared across connections. `run_effect` reports the provider-effect results
+//! the nexus runner asks for (live Cloudflare IO remains the legacy `Store`
+//! path / a follow-on slice).
+
+use std::sync::Arc;
+
 use meta_signal_cloud::schema::lib as meta;
 use signal_cloud::schema::lib as ordinary;
 
 use crate::schema::{nexus, sema};
+use crate::schema_store::{ProviderProjection, SchemaStore};
 
-#[derive(Debug, Clone)]
+/// The cloud schema-engine noun. Carries the durable `Store` (the two SEMA
+/// tables) plus the static capability matrix and the policy snapshot the SEMA
+/// `SetPolicy` write reports counts from. Implements both engine traits; the
+/// generated `NexusEngine::execute` drives the `Runner` over it.
+#[derive(Debug)]
 pub struct SchemaRuntime {
+    store: Arc<SchemaStore>,
     capabilities: Vec<ordinary::CapabilityObservation>,
-    accounts: Vec<meta::Registration>,
     policy: Option<meta::Policy>,
-    commit_sequence: u64,
 }
 
 impl Default for SchemaRuntime {
@@ -19,29 +39,47 @@ impl Default for SchemaRuntime {
 
 impl SchemaRuntime {
     pub fn new() -> Self {
+        Self::with_store(Arc::new(SchemaStore::new()))
+    }
+
+    /// Build an engine over a SHARED `Store`. The daemon constructs one per
+    /// request from a single shared `Arc<SchemaStore>`, so concurrent requests
+    /// share the durable tables while each owns its policy snapshot.
+    pub fn with_store(store: Arc<SchemaStore>) -> Self {
         Self {
+            store,
             capabilities: Self::default_capabilities(),
-            accounts: Vec::new(),
             policy: None,
-            commit_sequence: 0,
         }
     }
 
     pub fn with_capabilities(capabilities: Vec<ordinary::CapabilityObservation>) -> Self {
         Self {
+            store: Arc::new(SchemaStore::new()),
             capabilities,
-            accounts: Vec::new(),
             policy: None,
-            commit_sequence: 0,
         }
     }
 
-    pub fn accounts(&self) -> &[meta::Registration] {
-        &self.accounts
+    pub fn store(&self) -> &SchemaStore {
+        self.store.as_ref()
+    }
+
+    /// The registered account bindings, read from the durable account-policy
+    /// table.
+    pub fn accounts(&self) -> Vec<sema::AccountBinding> {
+        match self.store.lock() {
+            Ok(state) => state.accounts().to_vec(),
+            Err(_) => Vec::new(),
+        }
     }
 
     pub fn policy(&self) -> Option<&meta::Policy> {
         self.policy.as_ref()
+    }
+
+    fn commit_sequence(&self) -> u64 {
+        self.store.commit_sequence().unwrap_or(0)
     }
 
     fn default_capabilities() -> Vec<ordinary::CapabilityObservation> {
@@ -68,6 +106,8 @@ impl SchemaRuntime {
             },
         ]
     }
+
+    // ---- decide: signal arrival routing ---------------------------------
 
     fn decide_signal_arrival(&self, input: nexus::SignalInput) -> nexus::NexusAction {
         match input {
@@ -139,6 +179,8 @@ impl SchemaRuntime {
         nexus::NexusAction::ReplyToSignal(nexus::SignalOutput::MetaOutput(output))
     }
 
+    // ---- sema observe (the read path over the durable tables) -----------
+
     fn observe_sema(&self, input: sema::SemaReadInput) -> sema::SemaReadOutput {
         match input {
             sema::SemaReadInput::Observe(observation) => self.observe_ordinary(observation),
@@ -168,13 +210,27 @@ impl SchemaRuntime {
         sema::SemaReadOutput::Observed(result)
     }
 
-    fn observe_plan(&self, _query: ordinary::PlanQuery) -> sema::SemaReadOutput {
+    fn observe_plan(&self, query: ordinary::PlanQuery) -> sema::SemaReadOutput {
+        // The `PlanTable` is consulted by plan identifier (the composite 1:N
+        // key). Plan generation is not yet on the engine path — PreparePlan
+        // still returns the honest rejection, because diff-aware plan generation
+        // lives on the legacy `Store` Cloudflare path — so the table is empty
+        // and the durable lookup misses. The read still routes through the
+        // store, demonstrating the keyed lookup; projecting a stored meta `Plan`
+        // back into the ordinary `Plan` reply lands with engine-side plan
+        // generation.
+        let _ = self
+            .store
+            .lock()
+            .map(|state| state.plan(query.0.as_str()).cloned());
         sema::SemaReadOutput::Missed(self.rejection_report(sema::RejectionReason::PlanUnknown))
     }
 
     fn validate_ordinary(&self, _validation: ordinary::Validation) -> sema::SemaReadOutput {
         sema::SemaReadOutput::Validated(ordinary::ValidationReport::new(Vec::new()))
     }
+
+    // ---- sema apply (the write path over the durable tables) ------------
 
     fn apply_sema(&mut self, input: sema::SemaWriteInput) -> sema::SemaWriteOutput {
         match input {
@@ -189,46 +245,63 @@ impl SchemaRuntime {
             sema::SemaWriteInput::PrepareProjection(_) => sema::SemaWriteOutput::RequestRejected(
                 self.meta_rejection(meta::RejectionReason::PlanGenerationFailed),
             ),
-            sema::SemaWriteInput::ApprovePlan(_) => sema::SemaWriteOutput::RequestRejected(
-                self.meta_rejection(meta::RejectionReason::PlanUnknown),
-            ),
-            sema::SemaWriteInput::ApplyPlan(_) => sema::SemaWriteOutput::RequestRejected(
-                self.meta_rejection(meta::RejectionReason::PlanUnknown),
-            ),
+            sema::SemaWriteInput::ApprovePlan(approval) => self.approve_plan(approval),
+            sema::SemaWriteInput::ApplyPlan(application) => self.apply_plan(application),
             sema::SemaWriteInput::RetireAccount(retirement) => self.retire_account(retirement),
         }
     }
 
     fn register_account(&mut self, registration: meta::Registration) -> sema::SemaWriteOutput {
-        self.commit_sequence += 1;
-        self.accounts.push(registration.clone());
-        sema::SemaWriteOutput::AccountRegistered(meta::AccountRegistered {
-            provider: registration.provider,
-            provider_account: registration.provider_account,
-        })
+        let binding = sema::AccountBinding {
+            provider: ProviderProjection::new(registration.provider.clone()).into_ordinary(),
+            provider_account: registration.provider_account.clone(),
+            credential_handle: registration.credential_handle.clone(),
+        };
+        match self.store.lock() {
+            Ok(mut state) => {
+                state.put_account(binding);
+                sema::SemaWriteOutput::AccountRegistered(meta::AccountRegistered {
+                    provider: registration.provider,
+                    provider_account: registration.provider_account,
+                })
+            }
+            Err(_) => sema::SemaWriteOutput::RequestRejected(
+                self.meta_rejection(meta::RejectionReason::ProviderNotConfigured),
+            ),
+        }
     }
 
     fn rotate_credential(&mut self, rotation: meta::Rotation) -> sema::SemaWriteOutput {
-        self.commit_sequence += 1;
-        if let Some(account) = self.accounts.iter_mut().find(|account| {
-            account.provider == rotation.provider
-                && account.provider_account == rotation.provider_account
-        }) {
-            account.credential_handle = rotation.credential_handle;
-            return sema::SemaWriteOutput::CredentialRotated(meta::CredentialRotated {
+        let provider = ProviderProjection::new(rotation.provider.clone()).into_ordinary();
+        let rotated = match self.store.lock() {
+            Ok(mut state) => state.rotate_credential(
+                &provider,
+                &rotation.provider_account,
+                rotation.credential_handle.clone(),
+            ),
+            Err(_) => {
+                return sema::SemaWriteOutput::RequestRejected(
+                    self.meta_rejection(meta::RejectionReason::ProviderNotConfigured),
+                );
+            }
+        };
+        match rotated {
+            Some(_) => sema::SemaWriteOutput::CredentialRotated(meta::CredentialRotated {
                 provider: rotation.provider,
                 provider_account: rotation.provider_account,
-            });
+            }),
+            None => sema::SemaWriteOutput::RequestRejected(
+                self.meta_rejection(meta::RejectionReason::AccountUnknown),
+            ),
         }
-        sema::SemaWriteOutput::RequestRejected(
-            self.meta_rejection(meta::RejectionReason::AccountUnknown),
-        )
     }
 
     fn set_policy(&mut self, policy: meta::Policy) -> sema::SemaWriteOutput {
-        self.commit_sequence += 1;
         let capability_policy_count = policy.capabilities.len() as u64;
         let zone_policy_count = policy.zones.len() as u64;
+        if let Ok(mut state) = self.store.lock() {
+            state.next_commit_sequence();
+        }
         self.policy = Some(policy);
         sema::SemaWriteOutput::PolicySet(meta::PolicySet {
             capability_policy_count,
@@ -236,22 +309,64 @@ impl SchemaRuntime {
         })
     }
 
-    fn retire_account(&mut self, retirement: meta::Retirement) -> sema::SemaWriteOutput {
-        self.commit_sequence += 1;
-        let before = self.accounts.len();
-        self.accounts.retain(|account| {
-            account.provider != retirement.provider
-                || account.provider_account != retirement.provider_account
-        });
-        if self.accounts.len() == before {
-            return sema::SemaWriteOutput::RequestRejected(
-                self.meta_rejection(meta::RejectionReason::AccountUnknown),
-            );
+    fn approve_plan(&mut self, approval: meta::Approval) -> sema::SemaWriteOutput {
+        let approved = match self.store.lock() {
+            Ok(mut state) => state.approve_plan(approval.0.as_str()),
+            Err(_) => {
+                return sema::SemaWriteOutput::RequestRejected(
+                    self.meta_rejection(meta::RejectionReason::ProviderNotConfigured),
+                );
+            }
+        };
+        match approved {
+            Some(_) => sema::SemaWriteOutput::PlanApproved(meta::PlanApproved(approval.0)),
+            None => sema::SemaWriteOutput::RequestRejected(
+                self.meta_rejection(meta::RejectionReason::PlanUnknown),
+            ),
         }
-        sema::SemaWriteOutput::AccountRetired(meta::AccountRetired {
-            provider: retirement.provider,
-            provider_account: retirement.provider_account,
-        })
+    }
+
+    fn apply_plan(&mut self, application: meta::Application) -> sema::SemaWriteOutput {
+        let approved = match self.store.lock() {
+            Ok(state) => state
+                .plan(application.0.as_str())
+                .map(|stored| stored.approved),
+            Err(_) => {
+                return sema::SemaWriteOutput::RequestRejected(
+                    self.meta_rejection(meta::RejectionReason::ProviderNotConfigured),
+                );
+            }
+        };
+        match approved {
+            Some(true) => sema::SemaWriteOutput::PlanApplied(meta::PlanApplied(application.0)),
+            Some(false) => sema::SemaWriteOutput::RequestRejected(
+                self.meta_rejection(meta::RejectionReason::PlanNotApproved),
+            ),
+            None => sema::SemaWriteOutput::RequestRejected(
+                self.meta_rejection(meta::RejectionReason::PlanUnknown),
+            ),
+        }
+    }
+
+    fn retire_account(&mut self, retirement: meta::Retirement) -> sema::SemaWriteOutput {
+        let provider = ProviderProjection::new(retirement.provider.clone()).into_ordinary();
+        let retired = match self.store.lock() {
+            Ok(mut state) => state.retire_account(&provider, &retirement.provider_account),
+            Err(_) => {
+                return sema::SemaWriteOutput::RequestRejected(
+                    self.meta_rejection(meta::RejectionReason::ProviderNotConfigured),
+                );
+            }
+        };
+        match retired {
+            Some(_) => sema::SemaWriteOutput::AccountRetired(meta::AccountRetired {
+                provider: retirement.provider,
+                provider_account: retirement.provider_account,
+            }),
+            None => sema::SemaWriteOutput::RequestRejected(
+                self.meta_rejection(meta::RejectionReason::AccountUnknown),
+            ),
+        }
     }
 
     fn capability_report(&self, query: ordinary::CapabilityQuery) -> ordinary::CapabilityReport {
@@ -276,21 +391,23 @@ impl SchemaRuntime {
     }
 
     fn rejection_report(&self, reason: sema::RejectionReason) -> sema::RejectionReport {
+        let commit_sequence = self.commit_sequence();
         sema::RejectionReport {
             reason,
             marker: sema::StateMarker {
-                commit_sequence: self.commit_sequence,
-                state_digest: self.commit_sequence,
+                commit_sequence,
+                state_digest: commit_sequence,
             },
         }
     }
 
     fn meta_rejection(&self, reason: meta::RejectionReason) -> meta::RequestRejected {
+        let commit_sequence = self.commit_sequence();
         meta::RequestRejected {
             rejection_reason: reason,
             database_marker: meta::DatabaseMarker {
-                commit_sequence: self.commit_sequence,
-                state_digest: self.commit_sequence,
+                commit_sequence,
+                state_digest: commit_sequence,
             },
         }
     }
