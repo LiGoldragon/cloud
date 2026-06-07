@@ -11,7 +11,6 @@ use meta_signal_cloud::{
     Operation as MetaOperation, PlanApproved, PlanPreparation, PolicySet, ProjectionPreparation,
     Registration, Reply as MetaReply, RequestRejected as MetaRequestRejected, Retirement, Rotation,
 };
-use nota_codec::NotaRecord;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use signal_cloud::{
     Capability, CapabilityObservation, CapabilityQuery, CapabilityReport, CapabilityState,
@@ -62,7 +61,10 @@ pub enum Error {
     CommandLineRoute(#[from] signal_frame::CommandLineRouteError),
 
     #[error("NOTA decode error: {0}")]
-    Nota(#[from] nota_codec::Error),
+    Nota(#[from] nota_next::NotaDecodeError),
+
+    #[error("command-line error: {0}")]
+    CommandLine(#[from] signal_frame::CommandLineError),
 
     #[error("configuration archive decode failed")]
     ConfigurationArchiveDecode,
@@ -137,12 +139,12 @@ impl From<meta_signal_cloud::schema::lib::SignalFrameError> for Error {
     }
 }
 
-#[derive(Archive, RkyvSerialize, RkyvDeserialize, NotaRecord, Debug, Clone, PartialEq, Eq)]
+#[derive(Archive, RkyvSerialize, RkyvDeserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DaemonConfiguration {
     pub ordinary_socket_path: String,
     pub ordinary_socket_mode: u32,
-    pub owner_socket_path: String,
-    pub owner_socket_mode: u32,
+    pub meta_socket_path: String,
+    pub meta_socket_mode: u32,
 }
 
 impl DaemonConfiguration {
@@ -164,7 +166,7 @@ impl triad_runtime::DaemonConfiguration for DaemonConfiguration {
     }
 
     fn meta_socket_path(&self) -> Option<&Path> {
-        Some(Path::new(&self.owner_socket_path))
+        Some(Path::new(&self.meta_socket_path))
     }
 
     /// cloud's schema engine holds its account / plan tables in an in-memory
@@ -177,7 +179,7 @@ impl triad_runtime::DaemonConfiguration for DaemonConfiguration {
     }
 
     fn meta_socket_mode(&self) -> Option<triad_runtime::SocketMode> {
-        Some(triad_runtime::SocketMode::new(self.owner_socket_mode))
+        Some(triad_runtime::SocketMode::new(self.meta_socket_mode))
     }
 }
 
@@ -616,14 +618,14 @@ impl Store {
         )
     }
 
-    pub fn handle_owner_request(
+    pub fn handle_meta_request(
         &self,
         request: meta_signal_cloud::ChannelRequest,
     ) -> meta_signal_cloud::ChannelReply {
         let replies = request
             .payloads
             .into_iter()
-            .map(|operation| SubReply::Ok(self.handle_owner_operation(operation)))
+            .map(|operation| SubReply::Ok(self.handle_meta_operation(operation)))
             .collect::<Vec<_>>();
         FrameReply::committed(
             NonEmpty::try_from_vec(replies).expect("signal request is guaranteed non-empty"),
@@ -1090,7 +1092,7 @@ impl Store {
         #[cfg(feature = "cloudflare")]
         if provider == Provider::Cloudflare {
             return self.cloudflare_record_listing(zone).map_err(|error| {
-                MetaReplyError::new(Self::owner_reply_for_cloudflare_error(error))
+                MetaReplyError::new(Self::meta_reply_for_cloudflare_error(error))
             });
         }
         Ok(RecordListing { records: vec![] })
@@ -1110,7 +1112,7 @@ impl Store {
         }
     }
 
-    fn handle_owner_operation(&self, operation: MetaOperation) -> MetaReply {
+    fn handle_meta_operation(&self, operation: MetaOperation) -> MetaReply {
         match operation {
             MetaOperation::RegisterAccount(registration) => self.register_account(registration),
             MetaOperation::RotateCredential(rotation) => self.rotate_credential(rotation),
@@ -1133,7 +1135,7 @@ impl Store {
         if registration.provider == Provider::Cloudflare
             && let Err(error) = self.cloudflare.verify_credential(&registration.credential)
         {
-            return Self::owner_reply_for_cloudflare_error(error);
+            return Self::meta_reply_for_cloudflare_error(error);
         }
         let binding = AccountBinding {
             provider: registration.provider,
@@ -1235,14 +1237,14 @@ impl Store {
         };
         let zone_identifier = match self.cloudflare_zone_identifier(&binding, &plan.zone) {
             Ok(identifier) => identifier,
-            Err(error) => return Self::owner_reply_for_cloudflare_error(error),
+            Err(error) => return Self::meta_reply_for_cloudflare_error(error),
         };
         let listing = match self
             .cloudflare
             .apply_plan(&binding.credential, &zone_identifier, &plan)
         {
             Ok(listing) => listing,
-            Err(error) => return Self::owner_reply_for_cloudflare_error(error),
+            Err(error) => return Self::meta_reply_for_cloudflare_error(error),
         };
         self.replace_last_known_records(Provider::Cloudflare, plan.zone.clone(), listing);
         MetaReply::PlanApplied(meta_signal_cloud::PlanApplied {
@@ -1258,7 +1260,7 @@ impl Store {
     }
 
     #[cfg(feature = "cloudflare")]
-    fn owner_reply_for_cloudflare_error(error: cloudflare::Error) -> MetaReply {
+    fn meta_reply_for_cloudflare_error(error: cloudflare::Error) -> MetaReply {
         let reason = match error {
             cloudflare::Error::CredentialUnavailable(_) => {
                 meta_signal_cloud::RejectionReason::CredentialHandleUnknown

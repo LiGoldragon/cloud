@@ -26,16 +26,16 @@ impl Daemon {
             &self.configuration.ordinary_socket_path,
             self.configuration.ordinary_socket_mode,
         )?;
-        let owner_listener = Self::bind_socket(
-            &self.configuration.owner_socket_path,
-            self.configuration.owner_socket_mode,
+        let meta_listener = Self::bind_socket(
+            &self.configuration.meta_socket_path,
+            self.configuration.meta_socket_mode,
         )?;
 
         let ordinary_store = Arc::clone(&store);
         thread::spawn(move || Self::run_ordinary_listener(ordinary_listener, ordinary_store));
 
-        let owner_store = Arc::clone(&store);
-        thread::spawn(move || Self::run_owner_listener(owner_listener, owner_store));
+        let meta_store = Arc::clone(&store);
+        thread::spawn(move || Self::run_meta_listener(meta_listener, meta_store));
 
         loop {
             thread::sleep(Duration::from_secs(60));
@@ -66,7 +66,7 @@ impl Daemon {
         }
     }
 
-    pub fn serve_owner_stream(store: &Store, stream: &mut UnixStream) -> Result<()> {
+    pub fn serve_meta_stream(store: &Store, stream: &mut UnixStream) -> Result<()> {
         loop {
             let frame = MetaFrameIo::read(stream)?;
             match frame.into_body() {
@@ -79,7 +79,7 @@ impl Daemon {
                     MetaFrameIo::write(stream, &reply)?;
                 }
                 ExchangeFrameBody::Request { exchange, request } => {
-                    let reply = store.handle_owner_request(request);
+                    let reply = store.handle_meta_request(request);
                     let frame =
                         meta_signal_cloud::Frame::new(meta_signal_cloud::FrameBody::Reply {
                             exchange,
@@ -106,15 +106,15 @@ impl Daemon {
         }
     }
 
-    fn run_owner_listener(listener: UnixListener, store: Arc<Mutex<Store>>) {
+    fn run_meta_listener(listener: UnixListener, store: Arc<Mutex<Store>>) {
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
-                    if let Err(error) = Self::serve_owner_stream_shared(&store, &mut stream) {
-                        eprintln!("(OwnerSocketError \"{error}\")");
+                    if let Err(error) = Self::serve_meta_stream_shared(&store, &mut stream) {
+                        eprintln!("(MetaSocketError \"{error}\")");
                     }
                 }
-                Err(error) => eprintln!("(OwnerAcceptError \"{error}\")"),
+                Err(error) => eprintln!("(MetaAcceptError \"{error}\")"),
             }
         }
     }
@@ -149,7 +149,7 @@ impl Daemon {
         }
     }
 
-    fn serve_owner_stream_shared(store: &Arc<Mutex<Store>>, stream: &mut UnixStream) -> Result<()> {
+    fn serve_meta_stream_shared(store: &Arc<Mutex<Store>>, stream: &mut UnixStream) -> Result<()> {
         loop {
             let frame = MetaFrameIo::read(stream)?;
             match frame.into_body() {
@@ -164,7 +164,7 @@ impl Daemon {
                 ExchangeFrameBody::Request { exchange, request } => {
                     let reply = {
                         let store = store.lock().map_err(|_| Error::StorePoisoned)?;
-                        store.handle_owner_request(request)
+                        store.handle_meta_request(request)
                     };
                     let frame =
                         meta_signal_cloud::Frame::new(meta_signal_cloud::FrameBody::Reply {

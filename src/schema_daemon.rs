@@ -7,7 +7,7 @@
 //! in `build.rs`. cloud fills only the record-1488 escape hatches through `impl
 //! ComponentDaemon for CloudDaemon`: how to load its `Configuration`, how to
 //! open the shared `Arc<SchemaStore>` (`build_runtime`), how one ordinary
-//! `Input` becomes one `Output` (`handle_working_input`), and the owner-only
+//! `Input` becomes one `Output` (`handle_working_input`), and the meta-only
 //! meta tier (`handle_meta_stream`, whose meta wire codec is component-owned).
 //!
 //! This retires the prior hand-written `SchemaDaemon` / `CloudRuntime` /
@@ -84,7 +84,7 @@ impl ComponentDaemon for CloudDaemon {
         }
     }
 
-    /// Serve one owner-only meta request end to end: decode a meta-signal-cloud
+    /// Serve one meta request end to end: decode a meta-signal-cloud
     /// `Input` off the length-prefixed frame, drive it through a per-request
     /// engine, and write the meta `Output` back. The meta wire codec is
     /// component-owned (the emitter routes the meta socket here rather than

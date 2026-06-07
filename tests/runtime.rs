@@ -22,7 +22,7 @@ use meta_signal_cloud::{
 use meta_signal_cloud::{
     CredentialHandle, Operation as MetaOperation, Registration, Reply as MetaReply,
 };
-use nota_codec::NotaEncode;
+use nota_next::NotaEncode;
 use signal_cloud::{
     Capability, CapabilityReport, CapabilityState, DomainName, Observation,
     Operation as CloudOperation, Provider, ProviderAccount, Reply as CloudReply,
@@ -39,9 +39,7 @@ use signal_frame::{
 };
 
 fn encode_to_text(value: &impl NotaEncode) -> String {
-    let mut encoder = nota_codec::Encoder::new();
-    value.encode(&mut encoder).expect("encode");
-    encoder.into_string()
+    value.to_nota()
 }
 
 fn exchange() -> ExchangeIdentifier {
@@ -222,7 +220,7 @@ fn configure_cloudflare_account(store: &Store, credential: &str) {
     })
     .into_request();
     assert!(matches!(
-        store.handle_owner_request(registration),
+        store.handle_meta_request(registration),
         FrameReply::Accepted { .. }
     ));
 
@@ -241,7 +239,7 @@ fn configure_cloudflare_account(store: &Store, credential: &str) {
     })
     .into_request();
     assert!(matches!(
-        store.handle_owner_request(policy),
+        store.handle_meta_request(policy),
         FrameReply::Accepted { .. }
     ));
 }
@@ -374,7 +372,7 @@ fn daemon_process_starts_from_binary_configuration_and_answers_working_request()
 }
 
 #[test]
-fn command_line_dispatch_routes_working_and_owner_heads() {
+fn command_line_dispatch_routes_working_and_meta_heads() {
     let dispatch = CommandLineDispatch::new();
 
     assert_eq!(
@@ -382,18 +380,16 @@ fn command_line_dispatch_routes_working_and_owner_heads() {
         CommandLineSocket::Working
     );
     assert_eq!(
-        dispatch.route_head("RegisterAccount").expect("owner head"),
-        CommandLineSocket::Owner
+        dispatch.route_head("RegisterAccount").expect("meta head"),
+        CommandLineSocket::Meta
     );
     assert_eq!(
-        dispatch.route_head("PreparePlan").expect("owner head"),
-        CommandLineSocket::Owner
+        dispatch.route_head("PreparePlan").expect("meta head"),
+        CommandLineSocket::Meta
     );
     assert_eq!(
-        dispatch
-            .route_head("PrepareProjection")
-            .expect("owner head"),
-        CommandLineSocket::Owner
+        dispatch.route_head("PrepareProjection").expect("meta head"),
+        CommandLineSocket::Meta
     );
 }
 
@@ -410,7 +406,7 @@ fn command_line_request_rejects_flags_and_extra_arguments() {
 }
 
 #[test]
-fn command_line_request_decodes_owner_contract_by_head() {
+fn command_line_request_decodes_meta_contract_by_head() {
     let request = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
@@ -419,9 +415,9 @@ fn command_line_request_decodes_owner_contract_by_head() {
     .into_request();
     let text = encode_to_text(&request);
 
-    match CliRequest::from_nota(&text).expect("owner request") {
-        CliRequest::Owner(decoded) => assert_eq!(decoded, request),
-        other => panic!("expected owner request, got {other:?}"),
+    match CliRequest::from_nota(&text).expect("meta request") {
+        CliRequest::Meta(decoded) => assert_eq!(decoded, request),
+        other => panic!("expected meta request, got {other:?}"),
     }
 }
 
@@ -466,7 +462,7 @@ fn not_built_provider_dispatch_is_never_configured() {
     })
     .into_request();
     assert!(matches!(
-        store.handle_owner_request(registration),
+        store.handle_meta_request(registration),
         FrameReply::Accepted { .. } | FrameReply::Rejected { .. }
     ));
 
@@ -544,7 +540,7 @@ fn cloudflare_record_observation_requires_credential_environment() {
         credential: CredentialHandle::new("CLOUDFLARE_DNS_TOKEN"),
     })
     .into_request();
-    match store.handle_owner_request(registration) {
+    match store.handle_meta_request(registration) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
             SubReply::Ok(MetaReply::RequestRejected(rejection)) => assert_eq!(
                 rejection.reason,
@@ -623,7 +619,7 @@ fn validation_reports_malformed_dns_record_values() {
 
 #[test]
 #[cfg(feature = "cloudflare")]
-fn owner_policy_allows_approved_dns_plan_application() {
+fn meta_policy_allows_approved_dns_plan_application() {
     let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
     configure_cloudflare_account(&store, "CLOUDFLARE_DNS_TOKEN");
 
@@ -649,7 +645,7 @@ fn owner_policy_allows_approved_dns_plan_application() {
         },
     })
     .into_request();
-    let plan = match store.handle_owner_request(plan_request) {
+    let plan = match store.handle_meta_request(plan_request) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
             SubReply::Ok(MetaReply::PlanPrepared(plan)) => plan,
             other => panic!("unexpected plan reply {other:?}"),
@@ -665,7 +661,7 @@ fn owner_policy_allows_approved_dns_plan_application() {
     })
     .into_request();
     assert!(matches!(
-        store.handle_owner_request(approval),
+        store.handle_meta_request(approval),
         FrameReply::Accepted { .. }
     ));
 
@@ -673,7 +669,7 @@ fn owner_policy_allows_approved_dns_plan_application() {
         plan: plan.identifier,
     })
     .into_request();
-    match store.handle_owner_request(application) {
+    match store.handle_meta_request(application) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
             SubReply::Ok(MetaReply::PlanApplied(_)) => {}
             other => panic!("unexpected apply reply {other:?}"),
@@ -727,7 +723,7 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
         },
     })
     .into_request();
-    let plan = match store.handle_owner_request(plan_request) {
+    let plan = match store.handle_meta_request(plan_request) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
             SubReply::Ok(MetaReply::PlanPrepared(plan)) => plan,
             other => panic!("unexpected projection plan reply {other:?}"),
@@ -743,7 +739,7 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
     })
     .into_request();
     assert!(matches!(
-        store.handle_owner_request(approval),
+        store.handle_meta_request(approval),
         FrameReply::Accepted { .. }
     ));
 
@@ -751,7 +747,7 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
         plan: plan.identifier,
     })
     .into_request();
-    match store.handle_owner_request(application) {
+    match store.handle_meta_request(application) {
         FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
             SubReply::Ok(MetaReply::PlanApplied(_)) => {}
             other => panic!("unexpected projection apply reply {other:?}"),
@@ -777,12 +773,12 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
 
 #[test]
 #[cfg(feature = "cloudflare")]
-fn daemon_answers_owner_registration_over_frame_socket() {
+fn daemon_answers_meta_registration_over_frame_socket() {
     let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
     let (mut client_stream, mut daemon_stream) = UnixStream::pair().expect("socket pair");
 
     thread::spawn(move || {
-        Daemon::serve_owner_stream(&store, &mut daemon_stream).expect("daemon serves");
+        Daemon::serve_meta_stream(&store, &mut daemon_stream).expect("daemon serves");
     });
 
     let handshake = meta_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
@@ -837,8 +833,8 @@ fn daemon_configuration(directory: &Path) -> DaemonConfiguration {
     DaemonConfiguration {
         ordinary_socket_path: directory.join("cloud.sock").display().to_string(),
         ordinary_socket_mode: 0o600,
-        owner_socket_path: directory.join("cloud-owner.sock").display().to_string(),
-        owner_socket_mode: 0o600,
+        meta_socket_path: directory.join("cloud-meta.sock").display().to_string(),
+        meta_socket_mode: 0o600,
     }
 }
 

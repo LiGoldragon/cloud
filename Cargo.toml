@@ -24,11 +24,10 @@ default = ["cloudflare"]
 cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
 google-cloud = []
 hetzner = []
-nota-text = ["dep:nota-next", "signal-cloud/nota-text", "meta-signal-cloud/nota-text"]
+nota-text = ["signal-cloud/nota-text", "meta-signal-cloud/nota-text"]
 
 [dependencies]
-nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
-nota-next         = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main", optional = true }
+nota-next         = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
 meta-signal-cloud = { git = "https://github.com/LiGoldragon/meta-signal-cloud.git", branch = "main" }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
 signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }

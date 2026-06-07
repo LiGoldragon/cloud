@@ -4,7 +4,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use meta_signal_cloud::{ChannelRequest as MetaRequest, Reply as MetaReply};
-use nota_codec::{Decoder, Encoder, NotaDecode, NotaEncode, Token};
+use nota_next::{NotaEncode, NotaSource};
 use signal_cloud::{Reply as CloudReply, Request as CloudRequest};
 use signal_frame::{
     CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
@@ -15,30 +15,30 @@ use crate::frame_io::{MetaFrameIo, OrdinaryFrameIo};
 use crate::{Error, Result};
 
 const DEFAULT_ORDINARY_SOCKET_PATH: &str = "/run/cloud/cloud.sock";
-const DEFAULT_OWNER_SOCKET_PATH: &str = "/run/cloud/cloud-owner.sock";
+const DEFAULT_META_SOCKET_PATH: &str = "/run/cloud/cloud-meta.sock";
 const ORDINARY_SOCKET_ENVIRONMENT_VARIABLE: &str = "CLOUD_SOCKET_PATH";
-const OWNER_SOCKET_ENVIRONMENT_VARIABLE: &str = "CLOUD_OWNER_SOCKET_PATH";
+const META_SOCKET_ENVIRONMENT_VARIABLE: &str = "CLOUD_META_SOCKET_PATH";
 
 signal_frame::signal_cli! {
     pub struct CommandLineDispatch {
         working signal_cloud::Operation;
-        owner meta_signal_cloud::Operation;
+        meta meta_signal_cloud::Operation;
     }
 }
 
 pub struct Client {
     ordinary_socket_path: PathBuf,
-    owner_socket_path: PathBuf,
+    meta_socket_path: PathBuf,
 }
 
 impl Client {
     pub fn with_sockets(
         ordinary_socket_path: impl Into<PathBuf>,
-        owner_socket_path: impl Into<PathBuf>,
+        meta_socket_path: impl Into<PathBuf>,
     ) -> Self {
         Self {
             ordinary_socket_path: ordinary_socket_path.into(),
-            owner_socket_path: owner_socket_path.into(),
+            meta_socket_path: meta_socket_path.into(),
         }
     }
 
@@ -46,10 +46,10 @@ impl Client {
         let ordinary_socket_path = std::env::var_os(ORDINARY_SOCKET_ENVIRONMENT_VARIABLE)
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(DEFAULT_ORDINARY_SOCKET_PATH));
-        let owner_socket_path = std::env::var_os(OWNER_SOCKET_ENVIRONMENT_VARIABLE)
+        let meta_socket_path = std::env::var_os(META_SOCKET_ENVIRONMENT_VARIABLE)
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(DEFAULT_OWNER_SOCKET_PATH));
-        Self::with_sockets(ordinary_socket_path, owner_socket_path)
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_META_SOCKET_PATH));
+        Self::with_sockets(ordinary_socket_path, meta_socket_path)
     }
 
     pub fn send_working(&self, request: CloudRequest) -> Result<CloudReply> {
@@ -70,9 +70,9 @@ impl Client {
         }
     }
 
-    pub fn send_owner(&self, request: MetaRequest) -> Result<MetaReply> {
-        let mut stream = UnixStream::connect(&self.owner_socket_path)?;
-        self.handshake_owner(&mut stream)?;
+    pub fn send_meta(&self, request: MetaRequest) -> Result<MetaReply> {
+        let mut stream = UnixStream::connect(&self.meta_socket_path)?;
+        self.handshake_meta(&mut stream)?;
         let exchange = fresh_exchange();
         let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
         MetaFrameIo::write(&mut stream, &frame)?;
@@ -83,7 +83,7 @@ impl Client {
             ExchangeFrameBody::Reply {
                 exchange: reply_exchange,
                 reply,
-            } if reply_exchange == exchange => Self::unwrap_single_owner_reply(reply),
+            } if reply_exchange == exchange => Self::unwrap_single_meta_reply(reply),
             _ => Err(Error::UnexpectedFrame),
         }
     }
@@ -93,7 +93,7 @@ impl Client {
         let client = Self::from_environment();
         match request {
             CliRequest::Working(request) => encode_reply(&client.send_working(request)?),
-            CliRequest::Owner(request) => encode_reply(&client.send_owner(request)?),
+            CliRequest::Meta(request) => encode_reply(&client.send_meta(request)?),
         }
     }
 
@@ -112,7 +112,7 @@ impl Client {
         }
     }
 
-    fn handshake_owner(&self, stream: &mut UnixStream) -> Result<()> {
+    fn handshake_meta(&self, stream: &mut UnixStream) -> Result<()> {
         let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
             HandshakeRequest::current(),
         ));
@@ -139,7 +139,7 @@ impl Client {
         }
     }
 
-    fn unwrap_single_owner_reply(reply: FrameReply<MetaReply>) -> Result<MetaReply> {
+    fn unwrap_single_meta_reply(reply: FrameReply<MetaReply>) -> Result<MetaReply> {
         match reply {
             FrameReply::Accepted { per_operation, .. } => {
                 match per_operation.into_head_and_tail() {
@@ -155,7 +155,7 @@ impl Client {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliRequest {
     Working(CloudRequest),
-    Owner(MetaRequest),
+    Meta(MetaRequest),
 }
 
 impl CliRequest {
@@ -175,7 +175,8 @@ impl CliRequest {
         if text.starts_with("--") {
             return Err(Error::FlagArgument(text.to_owned()));
         }
-        let source = if text.starts_with('(') {
+        let trimmed = text.trim_start();
+        let source = if trimmed.starts_with('(') || trimmed.starts_with('[') {
             text.to_owned()
         } else {
             std::fs::read_to_string(PathBuf::from(argument))?
@@ -184,63 +185,22 @@ impl CliRequest {
     }
 
     pub fn from_nota(text: &str) -> Result<Self> {
-        match RequestHead::from_text(text)?.route()? {
+        match signal_frame::RequestHead::from_text(text)?
+            .route::<signal_cloud::Operation, meta_signal_cloud::Operation>()?
+        {
             CommandLineSocket::Working => Self::decode_working(text),
-            CommandLineSocket::Owner => Self::decode_owner(text),
+            CommandLineSocket::Meta => Self::decode_meta(text),
         }
     }
 
     fn decode_working(text: &str) -> Result<Self> {
-        let mut decoder = Decoder::new(text);
-        let payload = CloudRequest::decode(&mut decoder)?;
-        RequestEnd::new(&mut decoder).expect()?;
+        let payload = NotaSource::new(text).parse::<CloudRequest>()?;
         Ok(Self::Working(payload))
     }
 
-    fn decode_owner(text: &str) -> Result<Self> {
-        let mut decoder = Decoder::new(text);
-        let payload = MetaRequest::decode(&mut decoder)?;
-        RequestEnd::new(&mut decoder).expect()?;
-        Ok(Self::Owner(payload))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RequestHead {
-    head: String,
-}
-
-impl RequestHead {
-    pub fn from_text(text: &str) -> Result<Self> {
-        let mut decoder = Decoder::new(text);
-        if matches!(decoder.peek_token()?, Some(Token::LBracket)) {
-            decoder.expect_seq_start()?;
-        }
-        let head = decoder.peek_record_head()?;
-        Ok(Self { head })
-    }
-
-    pub fn route(&self) -> Result<CommandLineSocket> {
-        CommandLineDispatch::new()
-            .route_head(&self.head)
-            .map_err(Error::command_line_route)
-    }
-}
-
-struct RequestEnd<'decoder, 'text> {
-    decoder: &'decoder mut Decoder<'text>,
-}
-
-impl<'decoder, 'text> RequestEnd<'decoder, 'text> {
-    fn new(decoder: &'decoder mut Decoder<'text>) -> Self {
-        Self { decoder }
-    }
-
-    fn expect(self) -> Result<()> {
-        if self.decoder.peek_token()?.is_some() {
-            return Err(Error::TrailingInput);
-        }
-        Ok(())
+    fn decode_meta(text: &str) -> Result<Self> {
+        let payload = NotaSource::new(text).parse::<MetaRequest>()?;
+        Ok(Self::Meta(payload))
     }
 }
 
@@ -253,7 +213,5 @@ fn fresh_exchange() -> ExchangeIdentifier {
 }
 
 fn encode_reply(reply: &impl NotaEncode) -> Result<String> {
-    let mut encoder = Encoder::new();
-    reply.encode(&mut encoder)?;
-    Ok(encoder.into_string())
+    Ok(reply.to_nota())
 }

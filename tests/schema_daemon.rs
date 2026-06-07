@@ -77,22 +77,22 @@ fn spawn_daemon() -> (PathBuf, PathBuf) {
     ));
     std::fs::create_dir_all(&directory).expect("create daemon socket directory");
     let ordinary_socket_path = directory.join("cloud.sock");
-    let owner_socket_path = directory.join("cloud-owner.sock");
+    let meta_socket_path = directory.join("cloud-meta.sock");
     let configuration = DaemonConfiguration {
         ordinary_socket_path: ordinary_socket_path.to_string_lossy().into_owned(),
         ordinary_socket_mode: 0o600,
-        owner_socket_path: owner_socket_path.to_string_lossy().into_owned(),
-        owner_socket_mode: 0o600,
+        meta_socket_path: meta_socket_path.to_string_lossy().into_owned(),
+        meta_socket_mode: 0o600,
     };
     thread::spawn(move || {
         let _ = SchemaDaemon::new(configuration).run();
     });
-    (ordinary_socket_path, owner_socket_path)
+    (ordinary_socket_path, meta_socket_path)
 }
 
 #[test]
 fn schema_daemon_serves_ordinary_capability_observation_over_socket() {
-    let (ordinary_socket_path, _owner_socket_path) = spawn_daemon();
+    let (ordinary_socket_path, _meta_socket_path) = spawn_daemon();
     let mut client = SocketClient::connect(&ordinary_socket_path);
 
     let output = client.request_ordinary(ordinary::Input::Observe(
@@ -115,9 +115,9 @@ fn schema_daemon_serves_ordinary_capability_observation_over_socket() {
 }
 
 #[test]
-fn schema_daemon_serves_owner_registration_over_socket() {
-    let (_ordinary_socket_path, owner_socket_path) = spawn_daemon();
-    let mut client = SocketClient::connect(&owner_socket_path);
+fn schema_daemon_serves_meta_registration_over_socket() {
+    let (_ordinary_socket_path, meta_socket_path) = spawn_daemon();
+    let mut client = SocketClient::connect(&meta_socket_path);
 
     let output = client.request_meta(meta::Input::RegisterAccount(meta::Registration {
         provider: meta::Provider::Cloudflare,

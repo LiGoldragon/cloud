@@ -19,8 +19,8 @@ exactly one Signal peer: `cloud-daemon`.
 
 - observe provider accounts, zones, records, redirects, and capabilities;
 - validate desired provider-neutral state;
-- prepare provider-specific plans through owner authority;
-- apply owner-approved plans;
+- prepare provider-specific plans through meta authority;
+- apply meta-approved plans;
 - track provider rate limits, remote operation identifiers, and failures.
 
 `domain-criome` owns domain meaning and provider-neutral projection. `cloud`
@@ -37,25 +37,25 @@ The first daemon should use one actor per concern:
 - `RateLimitGate` for provider rate-limit and retry state;
 - `RemoteOperationTracker` for asynchronous provider operations.
 
-Provider calls must not block the ordinary listener, owner listener, or plan
+Provider calls must not block the ordinary listener, meta listener, or plan
 store. Slow provider work belongs behind provider actors with timeouts.
 
 ## Current Implementation Slice
 
-1. Bind ordinary and owner Unix sockets.
+1. Bind ordinary and meta Unix sockets.
 2. Decode `signal-cloud` and `meta-signal-cloud` frames.
 3. Return typed unsupported/configuration replies when no provider account is
    configured.
 4. Store account policy, prepared plans, and lossy last-known provider reads
    through a runtime store abstraction.
 5. Generate local plans from `meta-signal-cloud::PlanPreparation`.
-6. Require owner approval before apply.
+6. Require meta approval before apply.
 7. Resolve Cloudflare credential handles through environment variables and list
    Cloudflare zones and DNS records through the daemon-owned provider client.
-8. Apply owner-approved DNS-record plans through the daemon-owned Cloudflare
+8. Apply meta-approved DNS-record plans through the daemon-owned Cloudflare
    provider client. The production default uses `flarectl --json` for DNS
    record get/set; `HttpApi` remains available as a direct-API adapter.
-9. Accept `domain-criome` provider-neutral projections through the owner
+9. Accept `domain-criome` provider-neutral projections through the meta
    contract, lower them into provider plans, and apply those plans through the
    same approval ceremony.
 10. Validate DNS desired-state content enough to reject malformed IPv4/IPv6
@@ -71,8 +71,8 @@ current dependency blocker: `sema-engine` is now clean of the retired
 surface.
 
 Cloudflare DNS observation and DNS-record application are production-shaped:
-ordinary reads use the ordinary Signal socket, owner-approved application uses
-the meta Signal socket, both read only owner-registered accounts and zones,
+ordinary reads use the ordinary Signal socket, meta-approved application uses
+the meta Signal socket, both read only meta-registered accounts and zones,
 and the daemon caches the last known record listing after Cloudflare accepts a
 read or mutation. Redirect observation and redirect mutation are future slices;
 until the Rulesets/Page-Rules read path exists, redirect requests return typed
@@ -81,7 +81,7 @@ unsupported replies rather than silent empty listings.
 ## Hard Constraints
 
 - No provider credentials in source, logs, or ordinary Signal records.
-- Secret material crosses owner policy only by handle.
+- Secret material crosses meta policy only by handle.
 - No direct provider calls from the CLI.
 - No deprecated `signal-core` dependency in new code.
 - Cloudflare is a provider adapter, not the domain model.
@@ -98,7 +98,7 @@ the daemon runtime planes. The schema placement is split by runtime plane:
 
 - `signal-cloud` — ordinary working Signal schema only, published from
   `schema/lib.schema` through Cargo schema metadata.
-- `meta-signal-cloud` — meta (owner-only policy) policy Signal schema only,
+- `meta-signal-cloud` — meta policy Signal schema only,
   published from `schema/lib.schema` through Cargo schema metadata.
 - `cloud/schema/nexus.schema` — daemon-owned Nexus decision/effect
   plane schema; imports contract `Input`/`Output` roots and SEMA roots.
@@ -117,7 +117,7 @@ driven by a two-tier `NexusDaemonShape` targets the emitted daemon (triad_main).
 The daemon shape declares a `cloud-daemon` process whose working tier is a
 **dependency-crate contract** (`WorkingListenerTier::dependency("signal_cloud::schema::lib")`
 — cloud's triad keeps the ordinary contract in `signal-cloud`, not a locally
-emitted module) plus an owner-only meta tier (`meta-signal-cloud`, mode `0o600`).
+emitted module) plus a meta tier (`meta-signal-cloud`, mode `0o600`).
 The build consumes the ordinary `signal-cloud` and meta `meta-signal-cloud`
 schema directories from Cargo metadata, validates each authored schema as a
 `SchemaSource` through text and rkyv round-trips, then freshness-checks
@@ -146,11 +146,11 @@ so the emitted daemon hooks call it rather than carrying logic on a marker type.
 The daemon spine is now **emitted** into `src/schema/daemon.rs` by the
 schema-rust-next daemon emitter (triad_main): the `DaemonCommand` argv→config
 parse, the working decode→execute→encode `GeneratedDaemonRuntime`, the two-tier
-`MultiListenerDaemon` bind (working + owner-only meta, `ListenerTier::Working` /
+`MultiListenerDaemon` bind (working + meta, `ListenerTier::Working` /
 `ListenerTier::Meta`), `DaemonError`, and the `DaemonEntry` exit. `src/schema_daemon.rs`
 now hand-writes only the record-1488 escape hatches — `impl ComponentDaemon for
 CloudDaemon`: `build_runtime` (the shared `Arc<SchemaStore>`), `handle_working_input`
-(one ordinary `Input` → `Output` via `reply_to_signal`), and the owner-only
+(one ordinary `Input` → `Output` via `reply_to_signal`), and the meta
 `handle_meta_stream` (component-owned meta wire codec, decoding
 `meta_signal_cloud` frames) — plus a thin `SchemaDaemon::new(config).run()`
 wrapper over the emitted binder for tests/in-process launchers. (The prior
