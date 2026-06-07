@@ -109,13 +109,21 @@ adapters, policy state, plan state, credential-handle resolution, and future
 sema-engine persistence belong in the `cloud` runtime crate.
 
 `cloud/build.rs` is wired to the shared `schema_rust_next::build` driver for
-daemon runtime schemas: `schema/nexus.schema` targets `NexusRuntime`, and
-`schema/sema.schema` targets `SemaRuntime`. The build consumes the ordinary
-`signal-cloud` schema directory and the meta `meta-signal-cloud` schema
-directory from Cargo metadata, validates each authored schema as a
-`SchemaSource` object through text and rkyv round-trips, then
-freshness-checks `src/schema/{nexus,sema}.rs`. The daemon must not hard-code
-local checkout paths for contract schemas.
+daemon runtime schemas: `schema/nexus.schema` targets `NexusRuntime`,
+`schema/sema.schema` targets `SemaRuntime`, and a `daemon_module` emission
+driven by a two-tier `NexusDaemonShape` targets the emitted daemon (triad_main).
+The daemon shape declares a `cloud-daemon` process whose working tier is a
+**dependency-crate contract** (`WorkingListenerTier::dependency("signal_cloud::schema::lib")`
+— cloud's triad keeps the ordinary contract in `signal-cloud`, not a locally
+emitted module) plus an owner-only meta tier (`meta-signal-cloud`, mode `0o600`).
+The build consumes the ordinary `signal-cloud` and meta `meta-signal-cloud`
+schema directories from Cargo metadata, validates each authored schema as a
+`SchemaSource` through text and rkyv round-trips, then freshness-checks
+`src/schema/{nexus,sema,daemon}.rs`. The daemon must not hard-code local
+checkout paths for contract schemas. (cloud's `nexus.schema` / `sema.schema`
+enums use the **pair declaration form** `[(Variant Type) …]` for
+payload-carrying variants — the emitter reads a bare-name body-enum entry as a
+unit variant.)
 
 `src/schema_runtime.rs` is the implementation slice over those generated planes.
 It implements the generated Nexus and SEMA engine traits over a durable
@@ -128,26 +136,33 @@ keyed collection of `StoredPlan` keyed by plan identifier (report 77's interim
 in-memory workaround, requiring no `sema-engine` identified-multi-key primitive).
 Each request is served by its own `SchemaRuntime` over a clone of the shared
 `Arc<SchemaStore>`, so concurrent requests share the durable tables.
+`SchemaRuntime::reply_to_signal` is the per-request execute helper — it builds
+one engine over the shared store, drives the Nexus continuation to its terminal
+`ReplyToSignal`, and returns the `SignalOutput` — and lives on the engine noun
+so the emitted daemon hooks call it rather than carrying logic on a marker type.
 
-`src/schema_daemon.rs` wires that engine to a live daemon. `SchemaDaemon`
-binds the ordinary + owner sockets on one `triad_runtime::MultiListenerDaemon`,
-each tagged by a `ListenerRole` (`Ordinary` / `Owner`). `handle_stream` reads
-the length-prefixed wire body, decodes the arriving role's contract `Input`
-through the schema-emitted `decode_signal_frame`, wraps it in a
-`nexus::SignalInput`, drives it through `NexusEngine::execute` (the generated
-`Runner` continuation loop), and writes the contract `Output` back as a
-length-prefixed `encode_signal_frame` body. `src/schema_role.rs` carries the
-empty `triad-runtime` role-marker impls (`NexusWork`, `SemaWriteInput`, …) on
-the schema-emitted nouns that the 0.2.1 `RunnerEngines` bound requires until the
-cloud schema artifacts are regenerated against the newer emitter (which emits
-them inline).
+The daemon spine is now **emitted** into `src/schema/daemon.rs` by the
+schema-rust-next daemon emitter (triad_main): the `DaemonCommand` argv→config
+parse, the working decode→execute→encode `GeneratedDaemonRuntime`, the two-tier
+`MultiListenerDaemon` bind (working + owner-only meta, `ListenerTier::Working` /
+`ListenerTier::Meta`), `DaemonError`, and the `DaemonEntry` exit. `src/schema_daemon.rs`
+now hand-writes only the record-1488 escape hatches — `impl ComponentDaemon for
+CloudDaemon`: `build_runtime` (the shared `Arc<SchemaStore>`), `handle_working_input`
+(one ordinary `Input` → `Output` via `reply_to_signal`), and the owner-only
+`handle_meta_stream` (component-owned meta wire codec, decoding
+`meta_signal_cloud` frames) — plus a thin `SchemaDaemon::new(config).run()`
+wrapper over the emitted binder for tests/in-process launchers. (The prior
+hand-written `SchemaDaemon`/`CloudRuntime`/`serve_*`/`ListenerRole` plumbing and
+the `src/schema_role.rs` role-marker bridge are retired — the role-marker impls
+are emitted inline now.)
 
 The schema-engine daemon does not yet perform live Cloudflare IO (its
 `run_effect` reports empty provider listings) or engine-side diff-aware plan
 generation; those still live on the legacy [`crate::daemon::Daemon`] over
 `signal_frame::ExchangeFrame` + the hand-written `Store`, which `cloud-daemon`
-runs as the production runtime. `SchemaDaemon` is the build-verified,
-socket-tested schema-engine path; the `cloud-daemon` cutover lands once the
-effect plane carries the Cloudflare IO. Durable `sema-engine` / redb backing
-remains the noted follow-on (deferred while `sema-engine` still pulls the
-deprecated `signal-core` dependency).
+runs as the production runtime. The emitted-triad_main schema-engine path
+(`CloudDaemon` via `src/schema/daemon.rs`) is build-verified and socket-tested
+(the live `schema_daemon` tests drive both tiers over real Unix sockets); the
+`cloud-daemon` cutover lands once the effect plane carries the Cloudflare IO.
+Durable `sema-engine` / redb backing remains the noted follow-on (deferred
+while `sema-engine` still pulls the deprecated `signal-core` dependency).
