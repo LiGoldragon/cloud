@@ -138,19 +138,6 @@ the schema-emitted nouns that the 0.2.1 `RunnerEngines` bound requires until the
 cloud schema artifacts are regenerated against the newer emitter (which emits
 them inline).
 
-The newest core crates now emit a component daemon spine around the same
-triad-runtime primitives. The current direction is to evolve that emitted spine
-so it hosts the load-bearing daemon properties already proven by the new lojix
-stack, then let `cloud` adopt the generated/common daemon rather than keep a
-permanent fork. Any generated/common daemon adoption must preserve the
-first-class ordinary + meta contract routing into `nexus::SignalInput`, the
-per-request `SchemaRuntime` over shared `SchemaStore`, bounded length-prefixed
-frame handling with read timeouts, non-blocking provider work, and owner-socket
-peer-credential-derived origin/authority handling. Owner credential mismatch is
-a fail-closed rejection. Until the emitted spine hosts those properties and
-provider IO lives on the schema effect plane, `SchemaDaemon` remains the
-cloud-local schema-engine witness and the production daemon remains separate.
-
 The schema-engine daemon does not yet perform live Cloudflare IO (its
 `run_effect` reports empty provider listings) or engine-side diff-aware plan
 generation; those still live on the legacy [`crate::daemon::Daemon`] over
