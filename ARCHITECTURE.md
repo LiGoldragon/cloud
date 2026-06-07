@@ -92,9 +92,9 @@ unsupported replies rather than silent empty listings.
 
 ## Schema-engine upgrade track
 
-`main` keeps the production-shaped runtime on the hand-written Rust +
-`signal_channel!` path while also carrying source-visible schema artifacts for
-the daemon runtime planes. The schema placement is split by runtime plane:
+`main` now runs the production-shaped runtime through the emitted actor-native
+daemon spine while still preserving the existing provider `Store` behavior
+behind a schema bridge. The schema placement is split by runtime plane:
 
 - `signal-cloud` — ordinary working Signal schema only, published from
   `schema/lib.schema` through Cargo schema metadata.
@@ -127,47 +127,35 @@ enums use the **pair declaration form** `[(Variant Type) …]` for
 payload-carrying variants — the emitter reads a bare-name body-enum entry as a
 unit variant.)
 
-`src/schema_runtime.rs` is the implementation slice over those generated planes.
-It implements the generated Nexus and SEMA engine traits over a durable
-[`SchemaStore`] (`src/schema_store.rs`): it triages ordinary
+`src/schema_runtime.rs` remains the pure schema-engine implementation slice over
+those generated planes. It implements the generated Nexus and SEMA engine traits
+over [`SchemaStore`] (`src/schema_store.rs`): it triages ordinary
 capability/validation requests, triages meta registration/policy/plan requests,
 applies SEMA writes, observes SEMA reads, and turns SEMA completions back into
 Signal replies. The two schema-emitted SEMA tables back the state —
 `AccountPolicyTable` keyed by provider + account, and `PlanTable` as the 1:N
-keyed collection of `StoredPlan` keyed by plan identifier (report 77's interim
-in-memory workaround, requiring no `sema-engine` identified-multi-key primitive).
-Each request is served by its own `SchemaRuntime` over a clone of the shared
-`Arc<SchemaStore>`, so concurrent requests share the durable tables.
-`SchemaRuntime::reply_to_signal` is the per-request execute helper — it builds
-one engine over the shared store, drives the Nexus continuation to its terminal
-`ReplyToSignal`, and returns the `SignalOutput` — and lives on the engine noun
-so the emitted daemon hooks call it rather than carrying logic on a marker type.
+keyed collection of `StoredPlan` keyed by plan identifier. That slice is still
+valuable as the schema/Nexus/SEMA pilot, but it is not the live provider-effect
+path yet.
 
-The daemon spine is now **emitted** into `src/schema/daemon.rs` by the
-schema-rust-next daemon emitter (triad_main): the `DaemonCommand` argv→config
-parse, the async working decode→execute→encode `GeneratedDaemonRuntime`, the
-two-tier `ActorMultiListenerDaemon` bind (working + meta,
-`ListenerTier::Working` / `ListenerTier::Meta`), `DaemonError`, and the
-`DaemonEntry` exit. `src/schema_daemon.rs` now hand-writes only the record-1488
-escape hatches — `impl ComponentDaemon for CloudDaemon`: `build_runtime` (the
-shared `Arc<SchemaStore>`), `handle_working_input` (one ordinary `Input` →
-`Output` via `reply_to_signal`), and the async meta `handle_meta_connection`
-(component-owned meta wire codec over runtime-owned `AcceptedConnection`,
-decoding `meta_signal_cloud` frames) — plus a thin
-`SchemaDaemon::new(config).run()` wrapper over the emitted async binder for
-tests/in-process launchers. The prior hand-written
-`SchemaDaemon`/`CloudRuntime`/`serve_*`/`ListenerRole` plumbing and the
-`src/schema_role.rs` role-marker bridge are retired — the role-marker impls are
-emitted inline now.
+The live daemon spine is **emitted** into `src/schema/daemon.rs` by the
+schema-rust-next daemon emitter (triad_main): the `DaemonCommand` argv-to-config
+parse, the async working decode/handle/encode runtime, the two-tier
+`ActorMultiListenerDaemon` bind (working + meta, `ListenerTier::Working` /
+`ListenerTier::Meta`), `DaemonError`, and the `DaemonEntry` exit.
+`src/schema_daemon.rs` hand-writes only the component hooks:
+`impl ComponentDaemon for CloudDaemon`, whose runtime is `Arc<Store>`.
+Ordinary frames are generated `signal_cloud::schema::lib::Input` values and meta
+frames are generated `meta_signal_cloud::schema::lib::Input` values; the
+component converts them through `src/schema_bridge.rs` and delegates to the
+existing provider `Store`.
 
-The schema-engine daemon does not yet perform live Cloudflare IO (its
-`run_effect` reports empty provider listings) or engine-side diff-aware plan
-generation; those still live on the legacy [`crate::daemon::Daemon`] over
-`signal_frame::ExchangeFrame` + the hand-written `Store`, which `cloud-daemon`
-runs as the production runtime. The emitted-triad_main schema-engine path
-(`CloudDaemon` via `src/schema/daemon.rs`) is build-verified and socket-tested
-(the live `schema_daemon` tests drive both tiers over real Unix sockets); the
-`cloud-daemon` cutover lands once the effect plane carries the Cloudflare IO.
-Durable `sema-engine` backing remains the noted follow-on: the dependency
-blocker is gone, and the remaining work is replacing the current `SchemaStore`
-table implementation with sema-engine-owned database operations.
+This retires the prior hand-written blocking daemon and the old
+`ExchangeFrame`/handshake transport. `src/daemon.rs` and `src/frame_io.rs` no
+longer exist. `cloud-daemon` now uses length-prefixed schema frames over both
+sockets, while the CLI remains a NOTA edge adapter that parses the existing
+ordinary/meta operations and sends the generated schema frame to the daemon.
+Durable `sema-engine` backing and moving Cloudflare IO fully into the schema
+effect plane remain follow-on slices; the current cutover deliberately preserves
+provider behavior first, then lets the pure engine catch up without keeping two
+live socket stacks.

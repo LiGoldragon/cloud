@@ -116,7 +116,7 @@ fn schema_daemon_serves_ordinary_capability_observation_over_socket() {
 }
 
 #[test]
-fn schema_daemon_serves_meta_registration_over_socket() {
+fn schema_daemon_routes_meta_registration_to_provider_verification() {
     let (_ordinary_socket_path, meta_socket_path) = spawn_daemon();
     let mut client = SocketClient::connect(&meta_socket_path);
 
@@ -127,10 +127,12 @@ fn schema_daemon_serves_meta_registration_over_socket() {
     }));
 
     match output {
-        meta::Output::AccountRegistered(registered) => {
-            assert_eq!(registered.provider, meta::Provider::Cloudflare);
-            assert_eq!(registered.provider_account, "primary");
+        meta::Output::RequestRejected(rejected) => {
+            assert_eq!(
+                rejected.rejection_reason,
+                meta::RejectionReason::CredentialHandleUnknown
+            );
         }
-        other => panic!("expected account-registered reply, got {other:?}"),
+        other => panic!("expected credential rejection reply, got {other:?}"),
     }
 }

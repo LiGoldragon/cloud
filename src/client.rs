@@ -3,15 +3,17 @@ use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
-use meta_signal_cloud::{ChannelRequest as MetaRequest, Reply as MetaReply};
+use meta_signal_cloud::Operation as MetaOperation;
+use meta_signal_cloud::schema::lib as meta;
 use nota_next::{NotaEncode, NotaSource};
-use signal_cloud::{Reply as CloudReply, Request as CloudRequest};
-use signal_frame::{
-    CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
-    HandshakeRequest, LaneSequence, Reply as FrameReply, SessionEpoch, SubReply,
-};
+use signal_cloud::Operation as CloudOperation;
+use signal_cloud::schema::lib as ordinary;
+use signal_frame::CommandLineSocket;
+use triad_runtime::{FrameBody, LengthPrefixedCodec};
 
-use crate::frame_io::{MetaFrameIo, OrdinaryFrameIo};
+use crate::schema_bridge::{
+    SchemaCloudInput, SchemaCloudOutput, SchemaMetaInput, SchemaMetaOutput,
+};
 use crate::{Error, Result};
 
 const DEFAULT_ORDINARY_SOCKET_PATH: &str = "/run/cloud/cloud.sock";
@@ -52,110 +54,62 @@ impl Client {
         Self::with_sockets(ordinary_socket_path, meta_socket_path)
     }
 
-    pub fn send_working(&self, request: CloudRequest) -> Result<CloudReply> {
+    pub fn send_working(&self, input: ordinary::Input) -> Result<ordinary::Output> {
         let mut stream = UnixStream::connect(&self.ordinary_socket_path)?;
-        self.handshake_working(&mut stream)?;
-        let exchange = fresh_exchange();
-        let frame = signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-        OrdinaryFrameIo::write(&mut stream, &frame)?;
-        stream.flush()?;
-
-        let reply = OrdinaryFrameIo::read(&mut stream)?;
-        match reply.into_body() {
-            ExchangeFrameBody::Reply {
-                exchange: reply_exchange,
-                reply,
-            } if reply_exchange == exchange => Self::unwrap_single_reply(reply),
-            _ => Err(Error::UnexpectedFrame),
-        }
+        SchemaConnection::new(&mut stream).exchange_working(input)
     }
 
-    pub fn send_meta(&self, request: MetaRequest) -> Result<MetaReply> {
+    pub fn send_meta(&self, input: meta::Input) -> Result<meta::Output> {
         let mut stream = UnixStream::connect(&self.meta_socket_path)?;
-        self.handshake_meta(&mut stream)?;
-        let exchange = fresh_exchange();
-        let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-        MetaFrameIo::write(&mut stream, &frame)?;
-        stream.flush()?;
-
-        let reply = MetaFrameIo::read(&mut stream)?;
-        match reply.into_body() {
-            ExchangeFrameBody::Reply {
-                exchange: reply_exchange,
-                reply,
-            } if reply_exchange == exchange => Self::unwrap_single_meta_reply(reply),
-            _ => Err(Error::UnexpectedFrame),
-        }
+        SchemaConnection::new(&mut stream).exchange_meta(input)
     }
 
     pub fn run_from_environment() -> Result<String> {
         let request = CliRequest::from_arguments(std::env::args_os().skip(1))?;
         let client = Self::from_environment();
         match request {
-            CliRequest::Working(request) => encode_reply(&client.send_working(request)?),
-            CliRequest::Meta(request) => encode_reply(&client.send_meta(request)?),
+            CliRequest::Working(request) => {
+                encode_reply(&SchemaCloudOutput::new(client.send_working(request)?).into_reply())
+            }
+            CliRequest::Meta(request) => {
+                encode_reply(&SchemaMetaOutput::new(client.send_meta(request)?).into_reply())
+            }
         }
     }
+}
 
-    fn handshake_working(&self, stream: &mut UnixStream) -> Result<()> {
-        let frame = signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
-            HandshakeRequest::current(),
-        ));
-        OrdinaryFrameIo::write(stream, &frame)?;
-        let reply = OrdinaryFrameIo::read(stream)?;
-        match reply.into_body() {
-            ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_)) => Ok(()),
-            ExchangeFrameBody::HandshakeReply(HandshakeReply::Rejected(_)) => {
-                Err(Error::HandshakeRejected)
-            }
-            _ => Err(Error::UnexpectedFrame),
-        }
+pub struct SchemaConnection<'stream> {
+    stream: &'stream mut UnixStream,
+}
+
+impl<'stream> SchemaConnection<'stream> {
+    pub fn new(stream: &'stream mut UnixStream) -> Self {
+        Self { stream }
     }
 
-    fn handshake_meta(&self, stream: &mut UnixStream) -> Result<()> {
-        let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
-            HandshakeRequest::current(),
-        ));
-        MetaFrameIo::write(stream, &frame)?;
-        let reply = MetaFrameIo::read(stream)?;
-        match reply.into_body() {
-            ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_)) => Ok(()),
-            ExchangeFrameBody::HandshakeReply(HandshakeReply::Rejected(_)) => {
-                Err(Error::HandshakeRejected)
-            }
-            _ => Err(Error::UnexpectedFrame),
-        }
+    pub fn exchange_working(&mut self, input: ordinary::Input) -> Result<ordinary::Output> {
+        let codec = LengthPrefixedCodec::default();
+        codec.write_body(self.stream, &FrameBody::new(input.encode_signal_frame()?))?;
+        self.stream.flush()?;
+        let body = codec.read_body(self.stream)?;
+        let (_route, output) = ordinary::Output::decode_signal_frame(body.bytes())?;
+        Ok(output)
     }
 
-    fn unwrap_single_reply(reply: FrameReply<CloudReply>) -> Result<CloudReply> {
-        match reply {
-            FrameReply::Accepted { per_operation, .. } => {
-                match per_operation.into_head_and_tail() {
-                    (SubReply::Ok(payload), tail) if tail.is_empty() => Ok(payload),
-                    _ => Err(Error::SignalRequestFailed),
-                }
-            }
-            FrameReply::Rejected { .. } => Err(Error::SignalRequestRejected),
-        }
-    }
-
-    fn unwrap_single_meta_reply(reply: FrameReply<MetaReply>) -> Result<MetaReply> {
-        match reply {
-            FrameReply::Accepted { per_operation, .. } => {
-                match per_operation.into_head_and_tail() {
-                    (SubReply::Ok(payload), tail) if tail.is_empty() => Ok(payload),
-                    _ => Err(Error::SignalRequestFailed),
-                }
-            }
-            FrameReply::Rejected { .. } => Err(Error::SignalRequestRejected),
-        }
+    pub fn exchange_meta(&mut self, input: meta::Input) -> Result<meta::Output> {
+        let codec = LengthPrefixedCodec::default();
+        codec.write_body(self.stream, &FrameBody::new(input.encode_signal_frame()?))?;
+        self.stream.flush()?;
+        let body = codec.read_body(self.stream)?;
+        let (_route, output) = meta::Output::decode_signal_frame(body.bytes())?;
+        Ok(output)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliRequest {
-    Working(CloudRequest),
-    Meta(MetaRequest),
+    Working(ordinary::Input),
+    Meta(meta::Input),
 }
 
 impl CliRequest {
@@ -186,7 +140,7 @@ impl CliRequest {
 
     pub fn from_nota(text: &str) -> Result<Self> {
         match signal_frame::RequestHead::from_text(text)?
-            .route::<signal_cloud::Operation, meta_signal_cloud::Operation>()?
+            .route::<CloudOperation, MetaOperation>()?
         {
             CommandLineSocket::Working => Self::decode_working(text),
             CommandLineSocket::Meta => Self::decode_meta(text),
@@ -194,22 +148,18 @@ impl CliRequest {
     }
 
     fn decode_working(text: &str) -> Result<Self> {
-        let payload = NotaSource::new(text).parse::<CloudRequest>()?;
-        Ok(Self::Working(payload))
+        let payload = NotaSource::new(text).parse::<CloudOperation>()?;
+        Ok(Self::Working(
+            SchemaCloudInput::from_operation(payload).into_input(),
+        ))
     }
 
     fn decode_meta(text: &str) -> Result<Self> {
-        let payload = NotaSource::new(text).parse::<MetaRequest>()?;
-        Ok(Self::Meta(payload))
+        let payload = NotaSource::new(text).parse::<MetaOperation>()?;
+        Ok(Self::Meta(
+            SchemaMetaInput::from_operation(payload).into_input(),
+        ))
     }
-}
-
-fn fresh_exchange() -> ExchangeIdentifier {
-    ExchangeIdentifier::new(
-        SessionEpoch::new(1),
-        ExchangeLane::Connector,
-        LaneSequence::first(),
-    )
 }
 
 fn encode_reply(reply: &impl NotaEncode) -> Result<String> {

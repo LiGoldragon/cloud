@@ -22,15 +22,18 @@ use signal_cloud::{
 };
 use signal_frame::{NonEmpty, Reply as FrameReply, SubReply};
 
+use crate::schema_bridge::{
+    SchemaCloudInput, SchemaCloudOutput, SchemaMetaInput, SchemaMetaOutput,
+};
+
 pub mod client;
 #[cfg(feature = "cloudflare")]
 pub mod cloudflare;
 #[cfg(feature = "cloudflare")]
 pub mod cloudflare_cli;
-pub mod daemon;
 pub mod daemon_command;
-pub mod frame_io;
 pub mod schema;
+mod schema_bridge;
 pub mod schema_daemon;
 pub mod schema_runtime;
 pub mod schema_store;
@@ -105,9 +108,6 @@ pub enum Error {
     #[error("connection closed before a complete frame arrived")]
     ConnectionClosed,
 
-    #[error("signal handshake was rejected")]
-    HandshakeRejected,
-
     #[error("signal request was rejected before execution")]
     SignalRequestRejected,
 
@@ -172,11 +172,9 @@ impl triad_runtime::DaemonConfiguration for DaemonConfiguration {
         Some(Path::new(&self.meta_socket_path))
     }
 
-    /// cloud's schema engine holds its account / plan tables in an in-memory
-    /// `SchemaStore` for this slice (durable redb backing is the noted
-    /// follow-on), so no durable database path is opened — `build_runtime`
-    /// ignores it. The trait requires the method, so it returns an empty
-    /// placeholder path until the durable store lands.
+    /// cloud's live daemon currently builds its provider `Store` without a
+    /// daemon-owned durable database path. The triad-runtime trait still
+    /// exposes the hook for components whose runtime opens storage directly.
     fn database_path(&self) -> &Path {
         Path::new("")
     }
@@ -633,6 +631,22 @@ impl Store {
         FrameReply::committed(
             NonEmpty::try_from_vec(replies).expect("signal request is guaranteed non-empty"),
         )
+    }
+
+    pub fn handle_schema_ordinary_input(
+        &self,
+        input: signal_cloud::schema::lib::Input,
+    ) -> signal_cloud::schema::lib::Output {
+        let operation = SchemaCloudInput::new(input).into_operation();
+        SchemaCloudOutput::from_reply(self.handle_ordinary_operation(operation)).into_output()
+    }
+
+    pub fn handle_schema_meta_input(
+        &self,
+        input: meta_signal_cloud::schema::lib::Input,
+    ) -> meta_signal_cloud::schema::lib::Output {
+        let operation = SchemaMetaInput::new(input).into_operation();
+        SchemaMetaOutput::from_reply(self.handle_meta_operation(operation)).into_output()
     }
 
     fn handle_ordinary_operation(&self, operation: CloudOperation) -> CloudReply {

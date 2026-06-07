@@ -33,6 +33,9 @@ Spirit records; not embellished.*
 - `cloud-daemon` uses the emitted actor-native listener spine for ordinary and
   meta sockets; component code owns only the cloud-specific runtime hooks and
   the meta contract frame handling that the generator cannot derive yet.
+- `cloud-daemon` sockets carry length-prefixed generated schema frames. The
+  prior `ExchangeFrame` handshake transport is retired and should not be
+  reintroduced as a second live path.
 
 ## Principles
 

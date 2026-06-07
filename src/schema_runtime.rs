@@ -8,9 +8,10 @@
 //! account and plan state lives in the shared `Arc<SchemaStore>` (the two
 //! schema-emitted SEMA tables), so each request is served by its own
 //! `SchemaRuntime` over a clone of that handle while the durable tables are
-//! shared across connections. `run_effect` reports the provider-effect results
-//! the nexus runner asks for (live Cloudflare IO remains the legacy `Store`
-//! path / a follow-on slice).
+//! shared across connections. This engine is still the pure schema/Nexus/SEMA
+//! experiment; the live `cloud-daemon` currently uses the actor-native listener
+//! spine with the provider `Store` behind a schema bridge until provider effects
+//! move fully into the schema effect plane.
 
 use std::sync::Arc;
 
@@ -237,13 +238,13 @@ impl SchemaRuntime {
 
     fn observe_plan(&self, query: ordinary::PlanQuery) -> sema::SemaReadOutput {
         // The `PlanTable` is consulted by plan identifier (the composite 1:N
-        // key). Plan generation is not yet on the engine path — PreparePlan
-        // still returns the honest rejection, because diff-aware plan generation
-        // lives on the legacy `Store` Cloudflare path — so the table is empty
-        // and the durable lookup misses. The read still routes through the
-        // store, demonstrating the keyed lookup; projecting a stored meta `Plan`
-        // back into the ordinary `Plan` reply lands with engine-side plan
-        // generation.
+        // key). Plan generation is not yet on this pure schema engine path —
+        // PreparePlan still returns the honest rejection here, while the live
+        // daemon reaches diff-aware planning through the provider `Store`
+        // bridge — so the table is empty and the durable lookup misses. The
+        // read still routes through the store, demonstrating the keyed lookup;
+        // projecting a stored meta `Plan` back into the ordinary `Plan` reply
+        // lands with engine-side plan generation.
         let _ = self
             .store
             .lock()

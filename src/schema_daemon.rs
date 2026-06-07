@@ -7,10 +7,9 @@
 //! schema-rust-next's daemon emitter, driven by the two-tier `NexusDaemonShape`
 //! in `build.rs`. cloud fills only the record-1488 escape hatches through `impl
 //! ComponentDaemon for CloudDaemon`: how to load its `Configuration`, how to
-//! open the shared `Arc<SchemaStore>` (`build_runtime`), how one ordinary
-//! `Input` becomes one `Output` (`handle_working_input`), and the meta-only
-//! meta tier (`handle_meta_connection`, whose meta wire codec is
-//! component-owned).
+//! open the shared provider `Store` (`build_runtime`), how one ordinary `Input`
+//! becomes one `Output` (`handle_working_input`), and the meta-only meta tier
+//! (`handle_meta_connection`, whose meta wire codec is component-owned).
 //!
 //! This retires the prior hand-written `SchemaDaemon` / `CloudRuntime` /
 //! `serve_*` / `ListenerRole` plumbing into the emitted output (report 542 /
@@ -27,10 +26,7 @@ use triad_runtime::{
 };
 
 use crate::schema::daemon::{ComponentDaemon, DaemonBinder, DaemonError};
-use crate::schema::nexus::{SignalInput, SignalOutput};
-use crate::schema_runtime::SchemaRuntime;
-use crate::schema_store::SchemaStore;
-use crate::{DaemonConfiguration, Error, Result};
+use crate::{DaemonConfiguration, Error, Result, Store};
 
 /// Maximum inbound meta-request-frame body the daemon accepts (8 MiB). A cloud
 /// request is a few hundred bytes; this bounds a hostile length prefix far below
@@ -52,12 +48,10 @@ pub struct CloudDaemon;
 impl ComponentDaemon for CloudDaemon {
     type Configuration = DaemonConfiguration;
     type ConfigurationError = Error;
-    /// The engine is the SHARED durable store. Each request builds its own
-    /// per-request `SchemaRuntime` over a clone of this `Arc<SchemaStore>`
-    /// (intent 2alg: per-request pipeline cursor, the durable tables the only
-    /// shared, briefly-locked point), so the emitted spine can hold the engine
-    /// behind a shared reference and serve connections concurrently.
-    type Engine = Arc<SchemaStore>;
+    /// The engine is the shared provider store. The actor-native listener owns
+    /// the socket/connection lifecycle; cloud keeps the provider behavior in
+    /// the existing store until the schema effect plane carries provider IO.
+    type Engine = Arc<Store>;
     type Error = Error;
 
     const PROCESS_NAME: &'static str = "cloud-daemon";
@@ -70,22 +64,19 @@ impl ComponentDaemon for CloudDaemon {
     }
 
     fn build_runtime(_configuration: &Self::Configuration) -> Result<Self::Engine> {
-        Ok(Arc::new(SchemaStore::new()))
+        Ok(Arc::new(Store::new()))
     }
 
-    /// Run one decoded ordinary `Input` through a per-request engine over the
-    /// shared store and return the ordinary `Output`. The schema engine is the
-    /// single routing brain; cloud does not classify by origin yet, so the
-    /// peer-credential `connection` is unused.
+    /// Run one decoded ordinary `Input` through the shared provider store and
+    /// return the ordinary `Output`. The schema bridge preserves today's
+    /// provider behavior while the effect plane catches up; cloud does not
+    /// classify by origin yet, so the peer-credential `connection` is unused.
     fn handle_working_input(
         engine: &Self::Engine,
         input: Input,
         _connection: &ConnectionContext,
     ) -> Result<Output> {
-        match SchemaRuntime::reply_to_signal(engine.clone(), SignalInput::OrdinaryInput(input)) {
-            SignalOutput::OrdinaryOutput(output) => Ok(output),
-            SignalOutput::MetaOutput(_) => Err(Error::UnexpectedFrame),
-        }
+        Ok(engine.handle_schema_ordinary_input(input))
     }
 
     /// Serve one meta request end to end: decode a meta-signal-cloud
@@ -106,11 +97,7 @@ impl ComponentDaemon for CloudDaemon {
         .map_err(|_| Error::RequestReadTimedOut)??;
         let (_route, input) =
             meta_signal_cloud::schema::lib::Input::decode_signal_frame(body.bytes())?;
-        let reply =
-            match SchemaRuntime::reply_to_signal(engine.clone(), SignalInput::MetaInput(input)) {
-                SignalOutput::MetaOutput(output) => output,
-                SignalOutput::OrdinaryOutput(_) => return Err(Error::UnexpectedFrame),
-            };
+        let reply = engine.handle_schema_meta_input(input);
         codec
             .write_body_async(
                 connection.stream_mut(),

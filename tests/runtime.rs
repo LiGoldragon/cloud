@@ -6,14 +6,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cloud::client::{CliRequest, CommandLineDispatch};
+use cloud::client::{CliRequest, CommandLineDispatch, SchemaConnection};
 #[cfg(feature = "cloudflare")]
 use cloud::cloudflare::{
     Api as CloudflareApi, ApiRecord, ApiZone, CredentialSource, RecordIdentifier, Token,
 };
-use cloud::daemon::Daemon;
-use cloud::frame_io::{MetaFrameIo, OrdinaryFrameIo};
 use cloud::{CloudDaemonCommand, CloudDaemonConfigurationFile, DaemonConfiguration, Store};
+use meta_signal_cloud::schema::lib as meta_schema;
 #[cfg(feature = "cloudflare")]
 use meta_signal_cloud::{
     CapabilityDirective, CapabilityPolicy, PlanPreparation, Policy, ProjectionPreparation,
@@ -23,31 +22,20 @@ use meta_signal_cloud::{
     CredentialHandle, Operation as MetaOperation, Registration, Reply as MetaReply,
 };
 use nota_next::NotaEncode;
+use signal_cloud::schema::lib as ordinary_schema;
 use signal_cloud::{
-    Capability, CapabilityReport, CapabilityState, DomainName, Observation,
-    Operation as CloudOperation, Provider, ProviderAccount, Reply as CloudReply,
-    RequestUnsupported, UnsupportedReason,
+    Capability, DomainName, Observation, Operation as CloudOperation, Provider, ProviderAccount,
+    Reply as CloudReply, RequestUnsupported, UnsupportedReason,
 };
 #[cfg(feature = "cloudflare")]
 use signal_cloud::{
     DomainNameSystemRecord, ProxyMode, RecordKind, RecordListing, RecordValue, ZoneIdentifier,
 };
 use signal_domain_criome::{Projection, ProjectionQuery, ProjectionScope};
-use signal_frame::{
-    CommandLineSocket, ExchangeFrameBody, ExchangeIdentifier, ExchangeLane, HandshakeReply,
-    HandshakeRequest, LaneSequence, Reply as FrameReply, RequestPayload, SessionEpoch, SubReply,
-};
+use signal_frame::{CommandLineSocket, Reply as FrameReply, RequestPayload, SubReply};
 
 fn encode_to_text(value: &impl NotaEncode) -> String {
     value.to_nota()
-}
-
-fn exchange() -> ExchangeIdentifier {
-    ExchangeIdentifier::new(
-        SessionEpoch::new(1),
-        ExchangeLane::Connector,
-        LaneSequence::first(),
-    )
 }
 
 #[cfg(feature = "cloudflare")]
@@ -244,62 +232,24 @@ fn configure_cloudflare_account(store: &Store, credential: &str) {
     ));
 }
 
-fn capability_report_over_socket(
-    store: Store,
-    provider: Provider,
-    capability: Capability,
-) -> CapabilityReport {
-    let (mut client_stream, mut daemon_stream) = UnixStream::pair().expect("socket pair");
-
-    thread::spawn(move || {
-        Daemon::serve_ordinary_stream(&store, &mut daemon_stream).expect("daemon serves");
-    });
-
-    capability_report_from_stream(&mut client_stream, provider, capability)
-}
-
-fn capability_report_from_stream(
+fn capability_report_from_schema_stream(
     client_stream: &mut UnixStream,
-    provider: Provider,
-    capability: Capability,
-) -> CapabilityReport {
-    let handshake = signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
-        HandshakeRequest::current(),
-    ));
-    OrdinaryFrameIo::write(client_stream, &handshake).expect("write handshake");
-    let handshake_reply = OrdinaryFrameIo::read(client_stream).expect("read handshake");
-    assert!(matches!(
-        handshake_reply.into_body(),
-        ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_))
-    ));
-
-    let operation =
-        CloudOperation::Observe(Observation::Capabilities(signal_cloud::CapabilityQuery {
-            provider: Some(provider),
-            capability: Some(capability),
-        }));
-    let exchange = exchange();
-    let request = operation.into_request();
-    let frame = signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-    OrdinaryFrameIo::write(client_stream, &frame).expect("write request");
-
-    let reply = OrdinaryFrameIo::read(client_stream).expect("read reply");
-    match reply.into_body() {
-        ExchangeFrameBody::Reply {
-            exchange: reply_exchange,
-            reply: FrameReply::Accepted { per_operation, .. },
-        } => {
-            assert_eq!(reply_exchange, exchange);
-            let (head, tail) = per_operation.into_head_and_tail();
-            assert!(tail.is_empty());
-            match head {
-                SubReply::Ok(CloudReply::Observed(
-                    signal_cloud::ObservationResult::Capabilities(report),
-                )) => report,
-                other => panic!("unexpected reply {other:?}"),
-            }
-        }
-        other => panic!("unexpected frame {other:?}"),
+    provider: ordinary_schema::Provider,
+    capability: ordinary_schema::Capability,
+) -> ordinary_schema::CapabilityReport {
+    let output = SchemaConnection::new(client_stream)
+        .exchange_working(ordinary_schema::Input::Observe(
+            ordinary_schema::Observation::Capabilities(ordinary_schema::CapabilityQuery {
+                provider: Some(provider),
+                capability: Some(capability),
+            }),
+        ))
+        .expect("schema request");
+    match output {
+        ordinary_schema::Output::Observed(ordinary_schema::ObservationResult::Capabilities(
+            report,
+        )) => report,
+        other => panic!("unexpected schema output {other:?}"),
     }
 }
 
@@ -355,18 +305,18 @@ fn daemon_process_starts_from_binary_configuration_and_answers_working_request()
     let ordinary_socket = directory.path().join("cloud.sock");
     wait_for_socket(&ordinary_socket);
     let mut stream = UnixStream::connect(&ordinary_socket).expect("client connects");
-    let report = capability_report_from_stream(
+    let report = capability_report_from_schema_stream(
         &mut stream,
-        Provider::Cloudflare,
-        Capability::DomainNameSystemRecords,
+        ordinary_schema::Provider::Cloudflare,
+        ordinary_schema::Capability::DomainNameSystemRecords,
     );
     let expected_state = if cfg!(feature = "cloudflare") {
-        CapabilityState::Compiled
+        ordinary_schema::CapabilityState::Compiled
     } else {
-        CapabilityState::NotBuilt
+        ordinary_schema::CapabilityState::NotBuilt
     };
-    assert_eq!(report.capabilities.len(), 1);
-    assert_eq!(report.capabilities[0].state, expected_state);
+    assert_eq!(report.payload().len(), 1);
+    assert_eq!(report.payload()[0].capability_state, expected_state);
 
     stop_child(&mut child);
 }
@@ -407,48 +357,66 @@ fn command_line_request_rejects_flags_and_extra_arguments() {
 
 #[test]
 fn command_line_request_decodes_meta_contract_by_head() {
-    let request = MetaOperation::RegisterAccount(Registration {
+    let operation = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
         credential: CredentialHandle::new("cloudflare-dns-token"),
-    })
-    .into_request();
-    let text = encode_to_text(&request);
+    });
+    let text = encode_to_text(&operation);
 
     match CliRequest::from_nota(&text).expect("meta request") {
-        CliRequest::Meta(decoded) => assert_eq!(decoded, request),
+        CliRequest::Meta(meta_schema::Input::RegisterAccount(decoded)) => {
+            assert_eq!(decoded.provider, meta_schema::Provider::Cloudflare);
+            assert_eq!(decoded.provider_account, "primary");
+            assert_eq!(decoded.credential_handle, "cloudflare-dns-token");
+        }
         other => panic!("expected meta request, got {other:?}"),
     }
 }
 
 #[test]
-fn daemon_answers_working_capability_observation_over_frame_socket() {
-    let report = capability_report_over_socket(
-        Store::new(),
-        Provider::Cloudflare,
-        Capability::DomainNameSystemRecords,
-    );
+fn store_answers_schema_capability_observation_through_provider_logic() {
+    let output = Store::new().handle_schema_ordinary_input(ordinary_schema::Input::Observe(
+        ordinary_schema::Observation::Capabilities(ordinary_schema::CapabilityQuery {
+            provider: Some(ordinary_schema::Provider::Cloudflare),
+            capability: Some(ordinary_schema::Capability::DomainNameSystemRecords),
+        }),
+    ));
+    let ordinary_schema::Output::Observed(ordinary_schema::ObservationResult::Capabilities(report)) =
+        output
+    else {
+        panic!("unexpected schema output {output:?}");
+    };
     let expected_state = if cfg!(feature = "cloudflare") {
-        CapabilityState::Compiled
+        ordinary_schema::CapabilityState::Compiled
     } else {
-        CapabilityState::NotBuilt
+        ordinary_schema::CapabilityState::NotBuilt
     };
 
-    assert_eq!(report.capabilities.len(), 1);
-    assert_eq!(report.capabilities[0].state, expected_state);
+    assert_eq!(report.payload().len(), 1);
+    assert_eq!(report.payload()[0].capability_state, expected_state);
 }
 
 #[test]
 #[cfg(not(feature = "google-cloud"))]
-fn daemon_reports_not_built_provider_over_frame_socket() {
-    let report = capability_report_over_socket(
-        Store::new(),
-        Provider::GoogleCloud,
-        Capability::DomainNameSystemRecords,
-    );
+fn store_reports_not_built_provider_over_schema_input() {
+    let output = Store::new().handle_schema_ordinary_input(ordinary_schema::Input::Observe(
+        ordinary_schema::Observation::Capabilities(ordinary_schema::CapabilityQuery {
+            provider: Some(ordinary_schema::Provider::GoogleCloud),
+            capability: Some(ordinary_schema::Capability::DomainNameSystemRecords),
+        }),
+    ));
+    let ordinary_schema::Output::Observed(ordinary_schema::ObservationResult::Capabilities(report)) =
+        output
+    else {
+        panic!("unexpected schema output {output:?}");
+    };
 
-    assert_eq!(report.capabilities.len(), 1);
-    assert_eq!(report.capabilities[0].state, CapabilityState::NotBuilt);
+    assert_eq!(report.payload().len(), 1);
+    assert_eq!(
+        report.payload()[0].capability_state,
+        ordinary_schema::CapabilityState::NotBuilt
+    );
 }
 
 #[test]
@@ -773,47 +741,21 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
 
 #[test]
 #[cfg(feature = "cloudflare")]
-fn daemon_answers_meta_registration_over_frame_socket() {
+fn store_answers_schema_meta_registration_through_provider_logic() {
     let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
-    let (mut client_stream, mut daemon_stream) = UnixStream::pair().expect("socket pair");
-
-    thread::spawn(move || {
-        Daemon::serve_meta_stream(&store, &mut daemon_stream).expect("daemon serves");
-    });
-
-    let handshake = meta_signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
-        HandshakeRequest::current(),
+    let output = store.handle_schema_meta_input(meta_schema::Input::RegisterAccount(
+        meta_schema::Registration {
+            provider: meta_schema::Provider::Cloudflare,
+            provider_account: String::from("primary"),
+            credential_handle: String::from("cloudflare-dns-token"),
+        },
     ));
-    MetaFrameIo::write(&mut client_stream, &handshake).expect("write handshake");
-    let handshake_reply = MetaFrameIo::read(&mut client_stream).expect("read handshake");
-    assert!(matches!(
-        handshake_reply.into_body(),
-        ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_))
-    ));
-
-    let operation = MetaOperation::RegisterAccount(Registration {
-        provider: Provider::Cloudflare,
-        account: ProviderAccount::new("primary"),
-        credential: CredentialHandle::new("cloudflare-dns-token"),
-    });
-    let exchange = exchange();
-    let request = operation.into_request();
-    let frame = meta_signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-    MetaFrameIo::write(&mut client_stream, &frame).expect("write request");
-
-    let reply = MetaFrameIo::read(&mut client_stream).expect("read reply");
-    match reply.into_body() {
-        ExchangeFrameBody::Reply {
-            exchange: reply_exchange,
-            reply: FrameReply::Accepted { per_operation, .. },
-        } => {
-            assert_eq!(reply_exchange, exchange);
-            assert!(matches!(
-                per_operation.head(),
-                SubReply::Ok(MetaReply::AccountRegistered(_))
-            ));
+    match output {
+        meta_schema::Output::AccountRegistered(registered) => {
+            assert_eq!(registered.provider, meta_schema::Provider::Cloudflare);
+            assert_eq!(registered.provider_account, "primary");
         }
-        other => panic!("unexpected frame {other:?}"),
+        other => panic!("unexpected schema meta output {other:?}"),
     }
 }
 
@@ -821,12 +763,16 @@ fn daemon_answers_meta_registration_over_frame_socket() {
 fn runtime_slice_does_not_reintroduce_signal_core_or_provider_access_in_cli() {
     let manifest = std::fs::read_to_string("Cargo.toml").expect("manifest");
     assert!(!manifest.contains("signal-core"));
+    assert!(!Path::new("src/daemon.rs").exists());
+    assert!(!Path::new("src/frame_io.rs").exists());
 
     let client = std::fs::read_to_string("src/client.rs").expect("client source");
     assert!(!client.contains("reqwest"));
     assert!(!client.contains("ureq"));
     assert!(!client.contains("Cloudflare"));
     assert!(!client.contains("CredentialHandle"));
+    assert!(!client.contains("ExchangeFrameBody"));
+    assert!(!client.contains("Handshake"));
 }
 
 fn daemon_configuration(directory: &Path) -> DaemonConfiguration {

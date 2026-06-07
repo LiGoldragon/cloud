@@ -8,6 +8,6 @@ fn main() {
     }
 }
 
-fn run() -> cloud::Result<()> {
+fn run() -> Result<(), cloud::schema::daemon::DaemonError<cloud::schema_daemon::CloudDaemon>> {
     cloud::CloudDaemonCommand::from_environment().run()
 }

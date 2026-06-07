@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use triad_runtime::{ComponentArgument, ComponentCommand, SignalFile};
 
-use crate::daemon::Daemon;
+use crate::schema::daemon::{DaemonBinder, DaemonError};
+use crate::schema_daemon::CloudDaemon;
 use crate::{DaemonConfiguration, Error, Result};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -43,8 +44,16 @@ impl CloudDaemonCommand {
         }
     }
 
-    pub fn run(&self) -> Result<()> {
-        Daemon::new(self.configuration()?).run()
+    pub fn run(&self) -> std::result::Result<(), DaemonError<CloudDaemon>> {
+        let configuration = self.configuration().map_err(DaemonError::Component)?;
+        tokio::runtime::Runtime::new()
+            .map_err(DaemonError::Runtime)?
+            .block_on(async {
+                CloudDaemon::bind(configuration)?
+                    .run()
+                    .await
+                    .map_err(DaemonError::from)
+            })
     }
 }
 
