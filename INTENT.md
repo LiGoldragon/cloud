@@ -30,6 +30,9 @@ Spirit records; not embellished.*
   `DaemonConfiguration` file. Inline NOTA and `.nota` configuration
   files are CLI/authoring surfaces and are rejected by the daemon
   entrypoint.
+- `cloud-daemon` uses the emitted actor-native listener spine for ordinary and
+  meta sockets; component code owns only the cloud-specific runtime hooks and
+  the meta contract frame handling that the generator cannot derive yet.
 
 ## Principles
 

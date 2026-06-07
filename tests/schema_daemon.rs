@@ -1,8 +1,9 @@
 //! Live wiring test for the cloud schema-engine daemon: bind the two
-//! authority-tiered sockets, drive a real request through `MultiListenerDaemon`
-//! -> `decode_signal_frame` -> `SchemaRuntime::execute` -> reply, and decode the
-//! reply off the socket. Proves the schema engine is wired to a live daemon (not
-//! just unit-tested in `tests/schema_runtime.rs`).
+//! authority-tiered sockets, drive a real request through the emitted
+//! `ActorMultiListenerDaemon` -> `decode_signal_frame` ->
+//! `SchemaRuntime::execute` -> reply, and decode the reply off the socket.
+//! Proves the schema engine is wired to a live daemon (not just unit-tested in
+//! `tests/schema_runtime.rs`).
 
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;

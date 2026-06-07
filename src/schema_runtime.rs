@@ -69,8 +69,8 @@ impl SchemaRuntime {
     /// the reply. A non-reply terminal action is a runtime-invariant violation;
     /// it surfaces as an ordinary `PlanExpired` rejection to the caller. This is
     /// the per-request execute the emitted daemon's `handle_working_input` /
-    /// `handle_meta_stream` hooks call — it lives on the engine noun, not the
-    /// ZST daemon marker.
+    /// `handle_meta_connection` hooks call — it lives on the engine noun, not
+    /// the ZST daemon marker.
     pub fn reply_to_signal(
         store: Arc<SchemaStore>,
         signal_input: nexus::SignalInput,

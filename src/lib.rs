@@ -96,6 +96,9 @@ pub enum Error {
     #[error("unexpected signal frame for this socket")]
     UnexpectedFrame,
 
+    #[error("request read timed out")]
+    RequestReadTimedOut,
+
     #[error("trailing input after single NOTA request")]
     TrailingInput,
 

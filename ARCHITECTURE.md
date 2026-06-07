@@ -145,18 +145,20 @@ so the emitted daemon hooks call it rather than carrying logic on a marker type.
 
 The daemon spine is now **emitted** into `src/schema/daemon.rs` by the
 schema-rust-next daemon emitter (triad_main): the `DaemonCommand` argv→config
-parse, the working decode→execute→encode `GeneratedDaemonRuntime`, the two-tier
-`MultiListenerDaemon` bind (working + meta, `ListenerTier::Working` /
-`ListenerTier::Meta`), `DaemonError`, and the `DaemonEntry` exit. `src/schema_daemon.rs`
-now hand-writes only the record-1488 escape hatches — `impl ComponentDaemon for
-CloudDaemon`: `build_runtime` (the shared `Arc<SchemaStore>`), `handle_working_input`
-(one ordinary `Input` → `Output` via `reply_to_signal`), and the meta
-`handle_meta_stream` (component-owned meta wire codec, decoding
-`meta_signal_cloud` frames) — plus a thin `SchemaDaemon::new(config).run()`
-wrapper over the emitted binder for tests/in-process launchers. (The prior
-hand-written `SchemaDaemon`/`CloudRuntime`/`serve_*`/`ListenerRole` plumbing and
-the `src/schema_role.rs` role-marker bridge are retired — the role-marker impls
-are emitted inline now.)
+parse, the async working decode→execute→encode `GeneratedDaemonRuntime`, the
+two-tier `ActorMultiListenerDaemon` bind (working + meta,
+`ListenerTier::Working` / `ListenerTier::Meta`), `DaemonError`, and the
+`DaemonEntry` exit. `src/schema_daemon.rs` now hand-writes only the record-1488
+escape hatches — `impl ComponentDaemon for CloudDaemon`: `build_runtime` (the
+shared `Arc<SchemaStore>`), `handle_working_input` (one ordinary `Input` →
+`Output` via `reply_to_signal`), and the async meta `handle_meta_connection`
+(component-owned meta wire codec over runtime-owned `AcceptedConnection`,
+decoding `meta_signal_cloud` frames) — plus a thin
+`SchemaDaemon::new(config).run()` wrapper over the emitted async binder for
+tests/in-process launchers. The prior hand-written
+`SchemaDaemon`/`CloudRuntime`/`serve_*`/`ListenerRole` plumbing and the
+`src/schema_role.rs` role-marker bridge are retired — the role-marker impls are
+emitted inline now.
 
 The schema-engine daemon does not yet perform live Cloudflare IO (its
 `run_effect` reports empty provider listings) or engine-side diff-aware plan

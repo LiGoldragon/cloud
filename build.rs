@@ -102,10 +102,10 @@ impl ContractSchemaDependencies {
     /// (cloud's triad keeps the ordinary contract there, so the tier is a
     /// dependency contract imported as `signal_cloud::schema::lib`, not a
     /// locally emitted module). The meta tier's contract lives in
-    /// `meta-signal-cloud`; it is a full escape hatch decoded by
-    /// `handle_meta_stream`. The daemon module reads stream declarations from
-    /// the local `nexus` schema (cloud declares no stream), so no streaming
-    /// plumbing is emitted.
+    /// `meta-signal-cloud`; it is a full actor-native escape hatch decoded by
+    /// `handle_meta_connection`. The daemon module reads stream declarations
+    /// from the local `nexus` schema (cloud declares no stream), so no
+    /// streaming plumbing is emitted.
     fn daemon_shape() -> NexusDaemonShape {
         NexusDaemonShape::new(
             "cloud-daemon",

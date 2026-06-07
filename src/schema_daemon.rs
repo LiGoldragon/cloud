@@ -1,26 +1,30 @@
 //! cloud's daemon hooks — the only daemon code cloud hand-writes.
 //!
 //! The uniform daemon skeleton (the `DaemonCommand` argv parsing, the working
-//! decode -> execute -> encode spine, the two-tier `MultiListenerDaemon` bind,
-//! and the `ExitReport` entry) is EMITTED into `src/schema/daemon.rs` by
+//! decode -> execute -> encode spine, the two-tier
+//! `ActorMultiListenerDaemon` bind, and the `ExitReport` entry) is EMITTED into
+//! `src/schema/daemon.rs` by
 //! schema-rust-next's daemon emitter, driven by the two-tier `NexusDaemonShape`
 //! in `build.rs`. cloud fills only the record-1488 escape hatches through `impl
 //! ComponentDaemon for CloudDaemon`: how to load its `Configuration`, how to
 //! open the shared `Arc<SchemaStore>` (`build_runtime`), how one ordinary
 //! `Input` becomes one `Output` (`handle_working_input`), and the meta-only
-//! meta tier (`handle_meta_stream`, whose meta wire codec is component-owned).
+//! meta tier (`handle_meta_connection`, whose meta wire codec is
+//! component-owned).
 //!
 //! This retires the prior hand-written `SchemaDaemon` / `CloudRuntime` /
 //! `serve_*` / `ListenerRole` plumbing into the emitted output (report 542 /
 //! Spirit ocu7): cloud is the first multi-listener triad_main pilot and the
 //! first whose working contract is a dependency crate (`signal-cloud`).
 
-use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::time::Duration;
 
 use signal_cloud::schema::lib::{Input, Output};
-use triad_runtime::{ConnectionContext, FrameBody, LengthPrefixedCodec, MaximumFrameLength};
+use tokio::io::AsyncWriteExt;
+use triad_runtime::{
+    AcceptedConnection, ConnectionContext, FrameBody, LengthPrefixedCodec, MaximumFrameLength,
+};
 
 use crate::schema::daemon::{ComponentDaemon, DaemonBinder, DaemonError};
 use crate::schema::nexus::{SignalInput, SignalOutput};
@@ -89,11 +93,17 @@ impl ComponentDaemon for CloudDaemon {
     /// engine, and write the meta `Output` back. The meta wire codec is
     /// component-owned (the emitter routes the meta socket here rather than
     /// emitting a second frame spine), so this owns the full read/handle/write.
-    fn handle_meta_stream(engine: &Self::Engine, stream: UnixStream) -> Result<()> {
-        let mut stream = stream;
-        stream.set_read_timeout(Some(REQUEST_READ_TIMEOUT))?;
+    async fn handle_meta_connection(
+        engine: &Self::Engine,
+        mut connection: AcceptedConnection,
+    ) -> Result<()> {
         let codec = LengthPrefixedCodec::new(MaximumFrameLength::new(MAXIMUM_REQUEST_FRAME_BYTES));
-        let body = codec.read_body(&mut stream)?;
+        let body = tokio::time::timeout(
+            REQUEST_READ_TIMEOUT,
+            codec.read_body_async(connection.stream_mut()),
+        )
+        .await
+        .map_err(|_| Error::RequestReadTimedOut)??;
         let (_route, input) =
             meta_signal_cloud::schema::lib::Input::decode_signal_frame(body.bytes())?;
         let reply =
@@ -101,7 +111,13 @@ impl ComponentDaemon for CloudDaemon {
                 SignalOutput::MetaOutput(output) => output,
                 SignalOutput::OrdinaryOutput(_) => return Err(Error::UnexpectedFrame),
             };
-        codec.write_body(&mut stream, &FrameBody::new(reply.encode_signal_frame()?))?;
+        codec
+            .write_body_async(
+                connection.stream_mut(),
+                &FrameBody::new(reply.encode_signal_frame()?),
+            )
+            .await?;
+        connection.stream_mut().flush().await?;
         Ok(())
     }
 }
@@ -119,8 +135,13 @@ impl SchemaDaemon {
     }
 
     pub fn run(self) -> std::result::Result<(), DaemonError<CloudDaemon>> {
-        CloudDaemon::bind(self.configuration)?
-            .run()
-            .map_err(DaemonError::from)
+        tokio::runtime::Runtime::new()
+            .map_err(DaemonError::Runtime)?
+            .block_on(async {
+                CloudDaemon::bind(self.configuration)?
+                    .run()
+                    .await
+                    .map_err(DaemonError::from)
+            })
     }
 }
