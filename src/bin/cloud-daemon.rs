@@ -9,6 +9,5 @@ fn main() {
 }
 
 fn run() -> cloud::Result<()> {
-    let configuration = nota_config::ConfigurationSource::from_argv()?.decode()?;
-    cloud::daemon::Daemon::new(configuration).run()
+    cloud::CloudDaemonCommand::from_environment().run()
 }

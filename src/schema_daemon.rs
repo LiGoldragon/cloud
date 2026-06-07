@@ -19,7 +19,6 @@ use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::time::Duration;
 
-use nota_config::ConfigurationRecord;
 use signal_cloud::schema::lib::{Input, Output};
 use triad_runtime::{ConnectionContext, FrameBody, LengthPrefixedCodec, MaximumFrameLength};
 
@@ -63,7 +62,7 @@ impl ComponentDaemon for CloudDaemon {
         path: &std::path::Path,
     ) -> std::result::Result<Self::Configuration, Self::ConfigurationError> {
         let bytes = std::fs::read(path)?;
-        Ok(DaemonConfiguration::from_rkyv_bytes(&bytes)?)
+        DaemonConfiguration::from_rkyv_bytes(&bytes)
     }
 
     fn build_runtime(_configuration: &Self::Configuration) -> Result<Self::Engine> {

@@ -26,6 +26,10 @@ Spirit records; not embellished.*
   to compensate for missing metadata.
 - Provider credentials and secret bytes do not belong in source, logs, or
   ordinary Signal records; secret material crosses owner policy only by handle.
+- `cloud-daemon` starts from one signal-encoded rkyv
+  `DaemonConfiguration` file. Inline NOTA and `.nota` configuration
+  files are CLI/authoring surfaces and are rejected by the daemon
+  entrypoint.
 
 ## Principles
 

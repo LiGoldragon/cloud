@@ -12,8 +12,8 @@ use std::time::Duration;
 
 static DAEMON_INSTANCE: AtomicU32 = AtomicU32::new(0);
 
-use cloud::schema_daemon::SchemaDaemon;
 use cloud::DaemonConfiguration;
+use cloud::schema_daemon::SchemaDaemon;
 use meta_signal_cloud::schema::lib as meta;
 use signal_cloud::schema::lib as ordinary;
 use triad_runtime::{FrameBody, LengthPrefixedCodec};

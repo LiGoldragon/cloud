@@ -1,9 +1,11 @@
 use std::os::unix::net::UnixStream;
+use std::path::Path;
+use std::process::{Child, Command};
 #[cfg(feature = "cloudflare")]
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
 
-use cloud::Store;
 use cloud::client::{CliRequest, CommandLineDispatch};
 #[cfg(feature = "cloudflare")]
 use cloud::cloudflare::{
@@ -11,6 +13,7 @@ use cloud::cloudflare::{
 };
 use cloud::daemon::Daemon;
 use cloud::frame_io::{MetaFrameIo, OrdinaryFrameIo};
+use cloud::{CloudDaemonCommand, CloudDaemonConfigurationFile, DaemonConfiguration, Store};
 #[cfg(feature = "cloudflare")]
 use meta_signal_cloud::{
     CapabilityDirective, CapabilityPolicy, PlanPreparation, Policy, ProjectionPreparation,
@@ -254,11 +257,19 @@ fn capability_report_over_socket(
         Daemon::serve_ordinary_stream(&store, &mut daemon_stream).expect("daemon serves");
     });
 
+    capability_report_from_stream(&mut client_stream, provider, capability)
+}
+
+fn capability_report_from_stream(
+    client_stream: &mut UnixStream,
+    provider: Provider,
+    capability: Capability,
+) -> CapabilityReport {
     let handshake = signal_cloud::Frame::new(ExchangeFrameBody::HandshakeRequest(
         HandshakeRequest::current(),
     ));
-    OrdinaryFrameIo::write(&mut client_stream, &handshake).expect("write handshake");
-    let handshake_reply = OrdinaryFrameIo::read(&mut client_stream).expect("read handshake");
+    OrdinaryFrameIo::write(client_stream, &handshake).expect("write handshake");
+    let handshake_reply = OrdinaryFrameIo::read(client_stream).expect("read handshake");
     assert!(matches!(
         handshake_reply.into_body(),
         ExchangeFrameBody::HandshakeReply(HandshakeReply::Accepted(_))
@@ -272,9 +283,9 @@ fn capability_report_over_socket(
     let exchange = exchange();
     let request = operation.into_request();
     let frame = signal_cloud::Frame::new(ExchangeFrameBody::Request { exchange, request });
-    OrdinaryFrameIo::write(&mut client_stream, &frame).expect("write request");
+    OrdinaryFrameIo::write(client_stream, &frame).expect("write request");
 
-    let reply = OrdinaryFrameIo::read(&mut client_stream).expect("read reply");
+    let reply = OrdinaryFrameIo::read(client_stream).expect("read reply");
     match reply.into_body() {
         ExchangeFrameBody::Reply {
             exchange: reply_exchange,
@@ -292,6 +303,74 @@ fn capability_report_over_socket(
         }
         other => panic!("unexpected frame {other:?}"),
     }
+}
+
+#[test]
+fn daemon_configuration_accepts_binary_file_argument() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let configuration_path = directory.path().join("cloud-daemon.rkyv");
+    let configuration = daemon_configuration(directory.path());
+
+    CloudDaemonConfigurationFile::new(&configuration_path)
+        .write_configuration(&configuration)
+        .expect("write cloud daemon configuration");
+
+    let decoded = CloudDaemonCommand::from_arguments([configuration_path.display().to_string()])
+        .configuration()
+        .expect("read cloud daemon configuration");
+
+    assert_eq!(decoded, configuration);
+}
+
+#[test]
+fn daemon_configuration_rejects_nota_arguments() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let nota_path = directory.path().join("cloud-daemon.nota");
+    std::fs::write(&nota_path, "(DaemonConfiguration)").expect("write nota fixture");
+
+    let inline = CloudDaemonCommand::from_arguments(["(DaemonConfiguration)"])
+        .configuration()
+        .expect_err("inline NOTA is rejected");
+    let file = CloudDaemonCommand::from_arguments([nota_path.display().to_string()])
+        .configuration()
+        .expect_err(".nota file is rejected");
+
+    assert!(matches!(inline, cloud::Error::Argument(_)));
+    assert!(matches!(file, cloud::Error::Argument(_)));
+}
+
+#[test]
+fn daemon_process_starts_from_binary_configuration_and_answers_working_request() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let configuration_path = directory.path().join("cloud-daemon.rkyv");
+    let configuration = daemon_configuration(directory.path());
+
+    CloudDaemonConfigurationFile::new(&configuration_path)
+        .write_configuration(&configuration)
+        .expect("write cloud daemon configuration");
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cloud-daemon"))
+        .arg(&configuration_path)
+        .spawn()
+        .expect("cloud-daemon starts");
+
+    let ordinary_socket = directory.path().join("cloud.sock");
+    wait_for_socket(&ordinary_socket);
+    let mut stream = UnixStream::connect(&ordinary_socket).expect("client connects");
+    let report = capability_report_from_stream(
+        &mut stream,
+        Provider::Cloudflare,
+        Capability::DomainNameSystemRecords,
+    );
+    let expected_state = if cfg!(feature = "cloudflare") {
+        CapabilityState::Compiled
+    } else {
+        CapabilityState::NotBuilt
+    };
+    assert_eq!(report.capabilities.len(), 1);
+    assert_eq!(report.capabilities[0].state, expected_state);
+
+    stop_child(&mut child);
 }
 
 #[test]
@@ -752,4 +831,29 @@ fn runtime_slice_does_not_reintroduce_signal_core_or_provider_access_in_cli() {
     assert!(!client.contains("ureq"));
     assert!(!client.contains("Cloudflare"));
     assert!(!client.contains("CredentialHandle"));
+}
+
+fn daemon_configuration(directory: &Path) -> DaemonConfiguration {
+    DaemonConfiguration {
+        ordinary_socket_path: directory.join("cloud.sock").display().to_string(),
+        ordinary_socket_mode: 0o600,
+        owner_socket_path: directory.join("cloud-owner.sock").display().to_string(),
+        owner_socket_mode: 0o600,
+    }
+}
+
+fn wait_for_socket(socket: &Path) {
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if socket.exists() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("socket was not created: {}", socket.display());
+}
+
+fn stop_child(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }

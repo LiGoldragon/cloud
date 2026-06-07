@@ -83,6 +83,10 @@ unsupported replies rather than silent empty listings.
 - No direct provider calls from the CLI.
 - No deprecated `signal-core` dependency in new code.
 - Cloudflare is a provider adapter, not the domain model.
+- `cloud-daemon` starts from one signal-encoded rkyv
+  `DaemonConfiguration` file. Inline NOTA and `.nota` files are
+  rejected by the daemon entrypoint; NOTA remains at the CLI/authoring
+  edge.
 
 ## Schema-engine upgrade track
 
