@@ -64,9 +64,11 @@ store. Slow provider work belongs behind provider actors with timeouts.
    provider state: create new records, update changed records, and delete
    records omitted from desired state.
 
-`sema-engine` persistence is intentionally deferred because the current engine
-still pulls the deprecated `signal-core` dependency. The store boundary is kept
-small so persistence can be swapped in after that dependency is removed.
+`sema-engine` persistence is still a follow-on implementation slice, not a
+current dependency blocker: `sema-engine` is now clean of the retired
+`signal-core` crate. The store boundary is kept small so the current
+`SchemaStore` tables can move behind `sema-engine` without widening the daemon
+surface.
 
 Cloudflare DNS observation and DNS-record application are production-shaped:
 ordinary reads use the ordinary Signal socket, owner-approved application uses
@@ -164,5 +166,6 @@ runs as the production runtime. The emitted-triad_main schema-engine path
 (`CloudDaemon` via `src/schema/daemon.rs`) is build-verified and socket-tested
 (the live `schema_daemon` tests drive both tiers over real Unix sockets); the
 `cloud-daemon` cutover lands once the effect plane carries the Cloudflare IO.
-Durable `sema-engine` / redb backing remains the noted follow-on (deferred
-while `sema-engine` still pulls the deprecated `signal-core` dependency).
+Durable `sema-engine` backing remains the noted follow-on: the dependency
+blocker is gone, and the remaining work is replacing the current `SchemaStore`
+table implementation with sema-engine-owned database operations.

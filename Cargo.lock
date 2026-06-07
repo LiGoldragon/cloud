@@ -422,9 +422,10 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "meta-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#abce145f88eec23a3fde6665f40088570acea1c7"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#ac5bac46f5de91a3b4852964daed60611c992677"
 dependencies = [
  "nota-codec",
+ "nota-next",
  "rkyv",
  "schema-rust-next",
  "signal-cloud",
@@ -705,14 +706,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
-name = "schema"
-version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/schema.git?branch=main#bfe4ff40a1dca39cbc55f8cd5785a06ff2497abd"
-dependencies = [
- "nota-codec",
-]
-
-[[package]]
 name = "schema-next"
 version = "0.1.4"
 source = "git+https://github.com/LiGoldragon/schema-next.git?branch=main#77e71a410d03e3cc5c16cebd82202e712439e648"
@@ -722,19 +715,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "schema-rust"
-version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#6f5a77f11115c043b93d005086cda8cbec349cd4"
-dependencies = [
- "proc-macro2",
- "quote",
- "schema",
-]
-
-[[package]]
 name = "schema-rust-next"
-version = "0.1.14"
-source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#2c3c162d29ad38e87e1142526e24265c7cff1c59"
+version = "0.1.15"
+source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#8ae5b59633cfa1570ca0dbb7bc0096a0d3829374"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -802,9 +785,10 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#0ff53ff20ef7c993d9cc47e38a07a4abe1d1a113"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#d7f4c88cf19eb5467427e7728bb1db3815978b45"
 dependencies = [
  "nota-codec",
+ "nota-next",
  "rkyv",
  "schema-rust-next",
  "signal-frame",
@@ -824,7 +808,7 @@ dependencies = [
 [[package]]
 name = "signal-frame"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#6f5a77f11115c043b93d005086cda8cbec349cd4"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#ed066bcce411faf4cb4c7e8aad45cf72f8c9aa9e"
 dependencies = [
  "nota-codec",
  "paste",
@@ -836,13 +820,11 @@ dependencies = [
 [[package]]
 name = "signal-frame-macros"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#6f5a77f11115c043b93d005086cda8cbec349cd4"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#ed066bcce411faf4cb4c7e8aad45cf72f8c9aa9e"
 dependencies = [
  "nota-codec",
  "proc-macro2",
  "quote",
- "schema",
- "schema-rust",
  "syn",
 ]
 
@@ -965,7 +947,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "triad-runtime"
 version = "0.2.1"
-source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#cdda1b1f95283f36d488fa2435281e6201fe7fdb"
+source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#7c2529008d750f05bd18e7f3a90cc9ab7d41270e"
 dependencies = [
  "rustix",
  "signal-frame",

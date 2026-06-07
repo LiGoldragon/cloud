@@ -10,8 +10,9 @@
 //! `cloud` legacy `Store` shape. Report 77's interim workaround: the
 //! `PlanTable` is the 1:N collection keyed by a composite identifier, so no
 //! `sema-engine` identified-multi-key (`ox7e`) primitive is required. Durable
-//! `sema-engine` / redb backing is the noted follow-on, deferred while the
-//! engine still pulls the deprecated `signal-core` dependency.
+//! `sema-engine` backing is the noted follow-on; the old `signal-core`
+//! dependency blocker is gone, so the remaining work is adopting engine-owned
+//! database operations for these tables.
 
 use std::sync::{Mutex, MutexGuard};
 

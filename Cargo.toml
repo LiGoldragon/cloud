@@ -24,7 +24,7 @@ default = ["cloudflare"]
 cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
 google-cloud = []
 hetzner = []
-nota-text = ["dep:nota-next"]
+nota-text = ["dep:nota-next", "signal-cloud/nota-text", "meta-signal-cloud/nota-text"]
 
 [dependencies]
 nota-codec        = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }

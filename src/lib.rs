@@ -3,8 +3,6 @@
 //! The daemon owns provider policy and plan state. The CLI is only a
 //! text-to-Signal adapter for this daemon.
 
-extern crate self as cloud;
-
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
