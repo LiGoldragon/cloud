@@ -71,8 +71,8 @@ impl ComponentDaemon for CloudDaemon {
     /// return the ordinary `Output`. The schema bridge preserves today's
     /// provider behavior while the effect plane catches up; cloud does not
     /// classify by origin yet, so the peer-credential `connection` is unused.
-    fn handle_working_input(
-        engine: &Self::Engine,
+    async fn handle_working_input(
+        engine: &mut Self::Engine,
         input: Input,
         _connection: &ConnectionContext,
     ) -> Result<Output> {
@@ -85,7 +85,7 @@ impl ComponentDaemon for CloudDaemon {
     /// component-owned (the emitter routes the meta socket here rather than
     /// emitting a second frame spine), so this owns the full read/handle/write.
     async fn handle_meta_connection(
-        engine: &Self::Engine,
+        engine: &mut Self::Engine,
         mut connection: AcceptedConnection,
     ) -> Result<()> {
         let codec = LengthPrefixedCodec::new(MaximumFrameLength::new(MAXIMUM_REQUEST_FRAME_BYTES));

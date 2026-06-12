@@ -9,7 +9,7 @@ use sema::SemaEngine;
 #[test]
 fn ordinary_capability_observation_flows_through_generated_nexus_and_sema() {
     let mut runtime = SchemaRuntime::new();
-    let input = ordinary::Input::Observe(ordinary::Observation::Capabilities(
+    let input = ordinary::Input::observe(ordinary::Observation::capabilities(
         ordinary::CapabilityQuery {
             provider: Some(ordinary::Provider::Cloudflare),
             capability: Some(ordinary::Capability::DomainNameSystemRecords),
@@ -18,24 +18,25 @@ fn ordinary_capability_observation_flows_through_generated_nexus_and_sema() {
 
     let nexus_action = runtime
         .decide(
-            nexus::NexusWork::SignalArrived(nexus::SignalInput::OrdinaryInput(input.clone()))
-                .with_origin_route(nexus::OriginRoute(7)),
+            nexus::NexusWork::signal_arrived(nexus::SignalInput::ordinary_input(input.clone()))
+                .with_origin_route(nexus::OriginRoute::new(7)),
         )
         .into_root();
 
     let sema_input = match nexus_action {
-        nexus::NexusAction::CommandSemaRead(sema::SemaReadInput::Observe(observation)) => {
-            observation
-        }
+        nexus::NexusAction::CommandSemaRead(command) => command.into_payload(),
         other => panic!("expected SEMA read command, got {other:?}"),
     };
 
     let sema_output = runtime
-        .observe(sema::SemaReadInput::Observe(sema_input).with_origin_route(sema::OriginRoute(7)))
+        .observe(sema_input.with_origin_route(sema::OriginRoute::new(7)))
         .into_root();
 
     let report = match sema_output.clone() {
-        sema::SemaReadOutput::Observed(ordinary::ObservationResult::Capabilities(report)) => report,
+        sema::SemaReadOutput::Observed(observed) => match observed.into_payload() {
+            ordinary::ObservationResult::Capabilities(report) => report,
+            other => panic!("expected capability report, got {other:?}"),
+        },
         other => panic!("expected capability report, got {other:?}"),
     };
     assert_eq!(report.payload().len(), 1);
@@ -45,16 +46,24 @@ fn ordinary_capability_observation_flows_through_generated_nexus_and_sema() {
     );
 
     let reply = runtime
-        .execute(
-            nexus::NexusWork::SignalArrived(nexus::SignalInput::OrdinaryInput(input))
-                .with_origin_route(nexus::OriginRoute(8)),
+        .decide(
+            nexus::NexusWork::sema_read_completed(sema_output)
+                .with_origin_route(nexus::OriginRoute::new(8)),
         )
         .into_root();
 
     match reply {
-        nexus::NexusAction::ReplyToSignal(nexus::SignalOutput::OrdinaryOutput(
-            ordinary::Output::Observed(ordinary::ObservationResult::Capabilities(report)),
-        )) => assert_eq!(report.payload().len(), 1),
+        nexus::NexusAction::ReplyToSignal(reply) => match reply.into_payload() {
+            nexus::SignalOutput::OrdinaryOutput(ordinary::Output::Observed(observed)) => {
+                match observed.into_payload() {
+                    ordinary::ObservationResult::Capabilities(report) => {
+                        assert_eq!(report.payload().len(), 1);
+                    }
+                    other => panic!("expected capability report, got {other:?}"),
+                }
+            }
+            other => panic!("expected ordinary signal reply, got {other:?}"),
+        },
         other => panic!("expected ordinary signal reply, got {other:?}"),
     }
 }
@@ -64,44 +73,44 @@ fn meta_registration_flows_through_generated_nexus_and_sema() {
     let mut runtime = SchemaRuntime::new();
     let registration = meta::Registration {
         provider: meta::Provider::Cloudflare,
-        provider_account: String::from("primary"),
-        credential_handle: String::from("cloudflare/api-token"),
+        provider_account: meta::ProviderAccount::new("primary"),
+        credential_handle: meta::CredentialHandle::new("cloudflare/api-token"),
     };
 
     let nexus_action = runtime
         .decide(
-            nexus::NexusWork::SignalArrived(nexus::SignalInput::MetaInput(
-                meta::Input::RegisterAccount(registration.clone()),
+            nexus::NexusWork::signal_arrived(nexus::SignalInput::meta_input(
+                meta::Input::register_account(registration.clone()),
             ))
-            .with_origin_route(nexus::OriginRoute(11)),
+            .with_origin_route(nexus::OriginRoute::new(11)),
         )
         .into_root();
 
     let sema_input = match nexus_action {
-        nexus::NexusAction::CommandSemaWrite(sema::SemaWriteInput::RegisterAccount(payload)) => {
-            payload
-        }
+        nexus::NexusAction::CommandSemaWrite(command) => command.into_payload(),
         other => panic!("expected SEMA write command, got {other:?}"),
     };
 
+    let sema_output = runtime
+        .apply(sema_input.with_origin_route(sema::OriginRoute::new(12)))
+        .into_root();
     let reply = runtime
-        .execute(
-            nexus::NexusWork::SignalArrived(nexus::SignalInput::MetaInput(
-                meta::Input::RegisterAccount(sema_input),
-            ))
-            .with_origin_route(nexus::OriginRoute(12)),
+        .decide(
+            nexus::NexusWork::sema_write_completed(sema_output)
+                .with_origin_route(nexus::OriginRoute::new(12)),
         )
         .into_root();
 
     assert_eq!(runtime.accounts().len(), 1);
 
     match reply {
-        nexus::NexusAction::ReplyToSignal(nexus::SignalOutput::MetaOutput(
-            meta::Output::AccountRegistered(payload),
-        )) => {
-            assert_eq!(payload.provider, meta::Provider::Cloudflare);
-            assert_eq!(payload.provider_account, "primary");
-        }
+        nexus::NexusAction::ReplyToSignal(reply) => match reply.into_payload() {
+            nexus::SignalOutput::MetaOutput(meta::Output::AccountRegistered(payload)) => {
+                assert_eq!(payload.provider, meta::Provider::Cloudflare);
+                assert_eq!(payload.provider_account.payload(), "primary");
+            }
+            other => panic!("expected meta signal reply, got {other:?}"),
+        },
         other => panic!("expected meta signal reply, got {other:?}"),
     }
 }

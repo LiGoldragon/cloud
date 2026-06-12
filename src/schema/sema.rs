@@ -64,7 +64,7 @@ pub use meta_signal_cloud::schema::lib::CredentialHandle as CredentialHandle;
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
-pub use nota_next::{NotaDecode, NotaDecodeError, NotaEncode, NotaSource};
+pub use nota_next::{NotaDecodeError, NotaEncode, NotaSource};
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -76,13 +76,19 @@ pub enum SemaReadInput {
 }
 
 #[rustfmt::skip]
-pub type Observe = Observation;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Observe(Observation);
 
 #[rustfmt::skip]
-pub type ObservePlan = PlanQuery;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ObservePlan(PlanQuery);
 
 #[rustfmt::skip]
-pub type Validate = Validation;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Validate(Validation);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -95,10 +101,14 @@ pub enum SemaReadOutput {
 }
 
 #[rustfmt::skip]
-pub type PlanObserved = PlanResult;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PlanObserved(PlanResult);
 
 #[rustfmt::skip]
-pub type Missed = RejectionReport;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Missed(RejectionReport);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -115,28 +125,44 @@ pub enum SemaWriteInput {
 }
 
 #[rustfmt::skip]
-pub type RegisterAccount = Registration;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RegisterAccount(Registration);
 
 #[rustfmt::skip]
-pub type RotateCredential = Rotation;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RotateCredential(Rotation);
 
 #[rustfmt::skip]
-pub type SetPolicy = Policy;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetPolicy(Policy);
 
 #[rustfmt::skip]
-pub type PreparePlan = PlanPreparation;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PreparePlan(PlanPreparation);
 
 #[rustfmt::skip]
-pub type PrepareProjection = ProjectionPreparation;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PrepareProjection(ProjectionPreparation);
 
 #[rustfmt::skip]
-pub type ApprovePlan = Approval;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ApprovePlan(Approval);
 
 #[rustfmt::skip]
-pub type ApplyPlan = Application;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ApplyPlan(Application);
 
 #[rustfmt::skip]
-pub type RetireAccount = Retirement;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RetireAccount(Retirement);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -162,7 +188,16 @@ pub struct RejectionReport {
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+)]
 pub enum RejectionReason {
     ProviderNotConfigured,
     AccountUnknown,
@@ -182,15 +217,19 @@ pub struct StateMarker {
 }
 
 #[rustfmt::skip]
-pub type CommitSequence = Integer;
-
-#[rustfmt::skip]
-pub type StateDigest = Integer;
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CommitSequence(Integer);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AccountPolicyTable(pub Vec<AccountBinding>);
+pub struct StateDigest(Integer);
+
+#[rustfmt::skip]
+#[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
+#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AccountPolicyTable(Vec<AccountBinding>);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -204,7 +243,7 @@ pub struct AccountBinding {
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
 #[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct PlanTable(pub Vec<StoredPlan>);
+pub struct PlanTable(Vec<StoredPlan>);
 
 #[rustfmt::skip]
 #[cfg_attr(feature = "nota-text", derive(nota_next::NotaDecode, nota_next::NotaEncode))]
@@ -229,6 +268,291 @@ pub enum Input {
 pub enum Output {
     SemaReadOutput(SemaReadOutput),
     SemaWriteOutput(SemaWriteOutput),
+}
+
+#[rustfmt::skip]
+impl Observe {
+    pub fn new(payload: Observation) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Observation {
+        &self.0
+    }
+    pub fn into_payload(self) -> Observation {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Observation> for Observe {
+    fn from(payload: Observation) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ObservePlan {
+    pub fn new(payload: PlanQuery) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &PlanQuery {
+        &self.0
+    }
+    pub fn into_payload(self) -> PlanQuery {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<PlanQuery> for ObservePlan {
+    fn from(payload: PlanQuery) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Validate {
+    pub fn new(payload: Validation) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Validation {
+        &self.0
+    }
+    pub fn into_payload(self) -> Validation {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Validation> for Validate {
+    fn from(payload: Validation) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl PlanObserved {
+    pub fn new(payload: PlanResult) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &PlanResult {
+        &self.0
+    }
+    pub fn into_payload(self) -> PlanResult {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<PlanResult> for PlanObserved {
+    fn from(payload: PlanResult) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl Missed {
+    pub fn new(payload: RejectionReport) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &RejectionReport {
+        &self.0
+    }
+    pub fn into_payload(self) -> RejectionReport {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<RejectionReport> for Missed {
+    fn from(payload: RejectionReport) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl RegisterAccount {
+    pub fn new(payload: Registration) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Registration {
+        &self.0
+    }
+    pub fn into_payload(self) -> Registration {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Registration> for RegisterAccount {
+    fn from(payload: Registration) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl RotateCredential {
+    pub fn new(payload: Rotation) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Rotation {
+        &self.0
+    }
+    pub fn into_payload(self) -> Rotation {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Rotation> for RotateCredential {
+    fn from(payload: Rotation) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl SetPolicy {
+    pub fn new(payload: Policy) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Policy {
+        &self.0
+    }
+    pub fn into_payload(self) -> Policy {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Policy> for SetPolicy {
+    fn from(payload: Policy) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl PreparePlan {
+    pub fn new(payload: PlanPreparation) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &PlanPreparation {
+        &self.0
+    }
+    pub fn into_payload(self) -> PlanPreparation {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<PlanPreparation> for PreparePlan {
+    fn from(payload: PlanPreparation) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl PrepareProjection {
+    pub fn new(payload: ProjectionPreparation) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &ProjectionPreparation {
+        &self.0
+    }
+    pub fn into_payload(self) -> ProjectionPreparation {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<ProjectionPreparation> for PrepareProjection {
+    fn from(payload: ProjectionPreparation) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ApprovePlan {
+    pub fn new(payload: Approval) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Approval {
+        &self.0
+    }
+    pub fn into_payload(self) -> Approval {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Approval> for ApprovePlan {
+    fn from(payload: Approval) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl ApplyPlan {
+    pub fn new(payload: Application) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Application {
+        &self.0
+    }
+    pub fn into_payload(self) -> Application {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Application> for ApplyPlan {
+    fn from(payload: Application) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl RetireAccount {
+    pub fn new(payload: Retirement) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Retirement {
+        &self.0
+    }
+    pub fn into_payload(self) -> Retirement {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Retirement> for RetireAccount {
+    fn from(payload: Retirement) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl CommitSequence {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for CommitSequence {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl StateDigest {
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
+    }
+    pub fn payload(&self) -> &Integer {
+        &self.0
+    }
+    pub fn into_payload(self) -> Integer {
+        self.0
+    }
+}
+#[rustfmt::skip]
+impl From<Integer> for StateDigest {
+    fn from(payload: Integer) -> Self {
+        Self::new(payload)
+    }
 }
 
 #[rustfmt::skip]
@@ -271,14 +595,14 @@ impl From<Vec<StoredPlan>> for PlanTable {
 
 #[rustfmt::skip]
 impl SemaReadInput {
-    pub fn observe(payload: Observe) -> Self {
-        Self::Observe(payload)
+    pub fn observe(payload: Observation) -> Self {
+        Self::Observe(Observe::new(payload))
     }
-    pub fn observe_plan(payload: ObservePlan) -> Self {
-        Self::ObservePlan(payload)
+    pub fn observe_plan(payload: PlanQuery) -> Self {
+        Self::ObservePlan(ObservePlan::new(payload))
     }
-    pub fn validate(payload: Validate) -> Self {
-        Self::Validate(payload)
+    pub fn validate(payload: Validation) -> Self {
+        Self::Validate(Validate::new(payload))
     }
 }
 
@@ -290,39 +614,39 @@ impl SemaReadOutput {
     pub fn validated(payload: Validated) -> Self {
         Self::Validated(payload)
     }
-    pub fn plan_observed(payload: PlanObserved) -> Self {
-        Self::PlanObserved(payload)
+    pub fn plan_observed(payload: PlanResult) -> Self {
+        Self::PlanObserved(PlanObserved::new(payload))
     }
-    pub fn missed(payload: Missed) -> Self {
-        Self::Missed(payload)
+    pub fn missed(payload: RejectionReport) -> Self {
+        Self::Missed(Missed::new(payload))
     }
 }
 
 #[rustfmt::skip]
 impl SemaWriteInput {
-    pub fn register_account(payload: RegisterAccount) -> Self {
-        Self::RegisterAccount(payload)
+    pub fn register_account(payload: Registration) -> Self {
+        Self::RegisterAccount(RegisterAccount::new(payload))
     }
-    pub fn rotate_credential(payload: RotateCredential) -> Self {
-        Self::RotateCredential(payload)
+    pub fn rotate_credential(payload: Rotation) -> Self {
+        Self::RotateCredential(RotateCredential::new(payload))
     }
-    pub fn set_policy(payload: SetPolicy) -> Self {
-        Self::SetPolicy(payload)
+    pub fn set_policy(payload: Policy) -> Self {
+        Self::SetPolicy(SetPolicy::new(payload))
     }
-    pub fn prepare_plan(payload: PreparePlan) -> Self {
-        Self::PreparePlan(payload)
+    pub fn prepare_plan(payload: PlanPreparation) -> Self {
+        Self::PreparePlan(PreparePlan::new(payload))
     }
-    pub fn prepare_projection(payload: PrepareProjection) -> Self {
-        Self::PrepareProjection(payload)
+    pub fn prepare_projection(payload: ProjectionPreparation) -> Self {
+        Self::PrepareProjection(PrepareProjection::new(payload))
     }
-    pub fn approve_plan(payload: ApprovePlan) -> Self {
-        Self::ApprovePlan(payload)
+    pub fn approve_plan(payload: Approval) -> Self {
+        Self::ApprovePlan(ApprovePlan::new(payload))
     }
-    pub fn apply_plan(payload: ApplyPlan) -> Self {
-        Self::ApplyPlan(payload)
+    pub fn apply_plan(payload: Application) -> Self {
+        Self::ApplyPlan(ApplyPlan::new(payload))
     }
-    pub fn retire_account(payload: RetireAccount) -> Self {
-        Self::RetireAccount(payload)
+    pub fn retire_account(payload: Retirement) -> Self {
+        Self::RetireAccount(RetireAccount::new(payload))
     }
 }
 
@@ -375,6 +699,27 @@ impl Output {
 }
 
 #[rustfmt::skip]
+impl From<Observe> for SemaReadInput {
+    fn from(payload: Observe) -> Self {
+        Self::Observe(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<ObservePlan> for SemaReadInput {
+    fn from(payload: ObservePlan) -> Self {
+        Self::ObservePlan(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<Validate> for SemaReadInput {
+    fn from(payload: Validate) -> Self {
+        Self::Validate(payload)
+    }
+}
+
+#[rustfmt::skip]
 impl From<Observed> for SemaReadOutput {
     fn from(payload: Observed) -> Self {
         Self::Observed(payload)
@@ -385,6 +730,76 @@ impl From<Observed> for SemaReadOutput {
 impl From<Validated> for SemaReadOutput {
     fn from(payload: Validated) -> Self {
         Self::Validated(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<PlanObserved> for SemaReadOutput {
+    fn from(payload: PlanObserved) -> Self {
+        Self::PlanObserved(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<Missed> for SemaReadOutput {
+    fn from(payload: Missed) -> Self {
+        Self::Missed(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<RegisterAccount> for SemaWriteInput {
+    fn from(payload: RegisterAccount) -> Self {
+        Self::RegisterAccount(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<RotateCredential> for SemaWriteInput {
+    fn from(payload: RotateCredential) -> Self {
+        Self::RotateCredential(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<SetPolicy> for SemaWriteInput {
+    fn from(payload: SetPolicy) -> Self {
+        Self::SetPolicy(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<PreparePlan> for SemaWriteInput {
+    fn from(payload: PreparePlan) -> Self {
+        Self::PreparePlan(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<PrepareProjection> for SemaWriteInput {
+    fn from(payload: PrepareProjection) -> Self {
+        Self::PrepareProjection(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<ApprovePlan> for SemaWriteInput {
+    fn from(payload: ApprovePlan) -> Self {
+        Self::ApprovePlan(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<ApplyPlan> for SemaWriteInput {
+    fn from(payload: ApplyPlan) -> Self {
+        Self::ApplyPlan(payload)
+    }
+}
+
+#[rustfmt::skip]
+impl From<RetireAccount> for SemaWriteInput {
+    fn from(payload: RetireAccount) -> Self {
+        Self::RetireAccount(payload)
     }
 }
 
@@ -474,138 +889,6 @@ impl From<SemaWriteOutput> for Output {
 
 #[rustfmt::skip]
 #[cfg(feature = "nota-text")]
-impl SemaReadInput {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl SemaReadOutput {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl SemaWriteInput {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl SemaWriteOutput {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl RejectionReport {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl RejectionReason {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl StateMarker {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl AccountPolicyTable {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl AccountBinding {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl PlanTable {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl StoredPlan {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl Input {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
 impl std::str::FromStr for Input {
     type Err = NotaDecodeError;
     fn from_str(source: &str) -> Result<Self, Self::Err> {
@@ -617,17 +900,6 @@ impl std::str::FromStr for Input {
 impl std::fmt::Display for Input {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&<Self as NotaEncode>::to_nota(self))
-    }
-}
-
-#[rustfmt::skip]
-#[cfg(feature = "nota-text")]
-impl Output {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
-    }
-    pub fn to_nota(&self) -> String {
-        <Self as NotaEncode>::to_nota(self)
     }
 }
 
@@ -933,15 +1205,14 @@ impl TraceEvent {
     PartialEq,
     Eq,
 )]
-pub struct OriginRoute(pub Integer);
+pub struct OriginRoute(Integer);
 #[rustfmt::skip]
-#[cfg(feature = "nota-text")]
 impl OriginRoute {
-    pub fn from_nota_block(block: &nota_next::Block) -> Result<Self, NotaDecodeError> {
-        <Self as NotaDecode>::from_nota_block(block)
+    pub fn new(payload: Integer) -> Self {
+        Self(payload)
     }
-    pub fn to_nota(self) -> String {
-        <Self as NotaEncode>::to_nota(&self)
+    pub fn payload(&self) -> Integer {
+        self.0
     }
 }
 
@@ -1025,53 +1296,53 @@ impl triad_runtime::SemaReadOutput for SemaReadOutput {}
 
 #[rustfmt::skip]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ActorStartFailure {
+pub enum EngineStartFailure {
     ResourceBusy(String),
     ConfigurationInvalid(String),
 }
 #[rustfmt::skip]
-impl std::fmt::Display for ActorStartFailure {
+impl std::fmt::Display for EngineStartFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ResourceBusy(message) => {
-                write!(formatter, "actor resource busy: {message}")
+                write!(formatter, "engine resource busy: {message}")
             }
             Self::ConfigurationInvalid(message) => {
-                write!(formatter, "actor configuration invalid: {message}")
+                write!(formatter, "engine configuration invalid: {message}")
             }
         }
     }
 }
 #[rustfmt::skip]
-impl std::error::Error for ActorStartFailure {}
+impl std::error::Error for EngineStartFailure {}
 #[rustfmt::skip]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ActorStopFailure {
+pub enum EngineStopFailure {
     ResourceLocked(String),
     ChildStillRunning(String),
 }
 #[rustfmt::skip]
-impl std::fmt::Display for ActorStopFailure {
+impl std::fmt::Display for EngineStopFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ResourceLocked(message) => {
-                write!(formatter, "actor resource locked: {message}")
+                write!(formatter, "engine resource locked: {message}")
             }
             Self::ChildStillRunning(message) => {
-                write!(formatter, "actor child still running: {message}")
+                write!(formatter, "engine child still running: {message}")
             }
         }
     }
 }
 #[rustfmt::skip]
-impl std::error::Error for ActorStopFailure {}
+impl std::error::Error for EngineStopFailure {}
 
 #[rustfmt::skip]
-pub trait SemaEngine {
-    fn on_start(&mut self) -> Result<(), ActorStartFailure> {
+pub trait SemaEngine: Send {
+    fn on_start(&mut self) -> Result<(), EngineStartFailure> {
         Ok(())
     }
-    fn on_stop(&mut self) -> Result<(), ActorStopFailure> {
+    fn on_stop(&mut self) -> Result<(), EngineStopFailure> {
         Ok(())
     }
     fn trace_sema_activation(&self, _object_name: SemaObjectName) {}

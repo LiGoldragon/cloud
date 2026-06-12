@@ -8,7 +8,6 @@ use meta_signal_cloud::schema::lib as meta;
 use nota_next::{NotaEncode, NotaSource};
 use signal_cloud::Operation as CloudOperation;
 use signal_cloud::schema::lib as ordinary;
-use signal_frame::CommandLineSocket;
 use triad_runtime::{FrameBody, LengthPrefixedCodec};
 
 use crate::schema_bridge::{
@@ -20,13 +19,6 @@ const DEFAULT_ORDINARY_SOCKET_PATH: &str = "/run/cloud/cloud.sock";
 const DEFAULT_META_SOCKET_PATH: &str = "/run/cloud/cloud-meta.sock";
 const ORDINARY_SOCKET_ENVIRONMENT_VARIABLE: &str = "CLOUD_SOCKET_PATH";
 const META_SOCKET_ENVIRONMENT_VARIABLE: &str = "CLOUD_META_SOCKET_PATH";
-
-signal_frame::signal_cli! {
-    pub struct CommandLineDispatch {
-        working signal_cloud::Operation;
-        meta meta_signal_cloud::Operation;
-    }
-}
 
 pub struct Client {
     ordinary_socket_path: PathBuf,
@@ -64,17 +56,32 @@ impl Client {
         SchemaConnection::new(&mut stream).exchange_meta(input)
     }
 
-    pub fn run_from_environment() -> Result<String> {
-        let request = CliRequest::from_arguments(std::env::args_os().skip(1))?;
+    pub fn run_working_from_environment() -> Result<String> {
+        let input =
+            CommandLineInput::from_arguments(std::env::args_os().skip(1))?.into_working_input()?;
         let client = Self::from_environment();
-        match request {
-            CliRequest::Working(request) => {
-                encode_reply(&SchemaCloudOutput::new(client.send_working(request)?).into_reply())
-            }
-            CliRequest::Meta(request) => {
-                encode_reply(&SchemaMetaOutput::new(client.send_meta(request)?).into_reply())
-            }
-        }
+        let reply = SchemaCloudOutput::new(client.send_working(input)?).into_reply();
+        Self::encode_reply(&reply)
+    }
+
+    pub fn run_meta_from_environment() -> Result<String> {
+        let input =
+            CommandLineInput::from_arguments(std::env::args_os().skip(1))?.into_meta_input()?;
+        let client = Self::from_environment();
+        let reply = SchemaMetaOutput::new(client.send_meta(input)?).into_reply();
+        Self::encode_reply(&reply)
+    }
+
+    pub fn working_input_from_nota(text: &str) -> Result<ordinary::Input> {
+        CommandLineInput::from_nota(text).into_working_input()
+    }
+
+    pub fn meta_input_from_nota(text: &str) -> Result<meta::Input> {
+        CommandLineInput::from_nota(text).into_meta_input()
+    }
+
+    fn encode_reply(reply: &impl NotaEncode) -> Result<String> {
+        Ok(reply.to_nota())
     }
 }
 
@@ -107,12 +114,11 @@ impl<'stream> SchemaConnection<'stream> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CliRequest {
-    Working(ordinary::Input),
-    Meta(meta::Input),
+pub struct CommandLineInput {
+    text: String,
 }
 
-impl CliRequest {
+impl CommandLineInput {
     pub fn from_arguments<I, S>(arguments: I) -> Result<Self>
     where
         I: IntoIterator<Item = S>,
@@ -133,35 +139,24 @@ impl CliRequest {
         let source = if trimmed.starts_with('(') || trimmed.starts_with('[') {
             text.to_owned()
         } else {
-            std::fs::read_to_string(PathBuf::from(argument))?
+            std::fs::read_to_string(PathBuf::from(argument.as_os_str()))?
         };
-        Self::from_nota(&source)
+        Ok(Self { text: source })
     }
 
-    pub fn from_nota(text: &str) -> Result<Self> {
-        match signal_frame::RequestHead::from_text(text)?
-            .route::<CloudOperation, MetaOperation>()?
-        {
-            CommandLineSocket::Working => Self::decode_working(text),
-            CommandLineSocket::Meta => Self::decode_meta(text),
+    pub fn from_nota(text: &str) -> Self {
+        Self {
+            text: text.to_owned(),
         }
     }
 
-    fn decode_working(text: &str) -> Result<Self> {
-        let payload = NotaSource::new(text).parse::<CloudOperation>()?;
-        Ok(Self::Working(
-            SchemaCloudInput::from_operation(payload).into_input(),
-        ))
+    pub fn into_working_input(self) -> Result<ordinary::Input> {
+        let payload = NotaSource::new(&self.text).parse::<CloudOperation>()?;
+        Ok(SchemaCloudInput::from_operation(payload).into_input())
     }
 
-    fn decode_meta(text: &str) -> Result<Self> {
-        let payload = NotaSource::new(text).parse::<MetaOperation>()?;
-        Ok(Self::Meta(
-            SchemaMetaInput::from_operation(payload).into_input(),
-        ))
+    pub fn into_meta_input(self) -> Result<meta::Input> {
+        let payload = NotaSource::new(&self.text).parse::<MetaOperation>()?;
+        Ok(SchemaMetaInput::from_operation(payload).into_input())
     }
-}
-
-fn encode_reply(reply: &impl NotaEncode) -> Result<String> {
-    Ok(reply.to_nota())
 }

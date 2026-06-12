@@ -154,7 +154,9 @@ This retires the prior hand-written blocking daemon and the old
 `ExchangeFrame`/handshake transport. `src/daemon.rs` and `src/frame_io.rs` no
 longer exist. `cloud-daemon` now uses length-prefixed schema frames over both
 sockets, while the CLI remains a NOTA edge adapter that parses the existing
-ordinary/meta operations and sends the generated schema frame to the daemon.
+ordinary operations and sends generated ordinary schema frames to the daemon.
+`meta-cloud` is the sibling thin client for meta operations and sends generated
+meta schema frames to the daemon.
 Durable `sema-engine` backing and moving Cloudflare IO fully into the schema
 effect plane remain follow-on slices; the current cutover deliberately preserves
 provider behavior first, then lets the pure engine catch up without keeping two

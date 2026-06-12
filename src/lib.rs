@@ -54,20 +54,17 @@ pub enum Error {
     #[error("listener error: {0}")]
     Listener(#[from] triad_runtime::ListenerError),
 
+    #[error("engine request error: {0}")]
+    EngineRequest(#[from] triad_runtime::EngineRequestError),
+
     #[error("ordinary signal frame error: {0}")]
     OrdinaryFrame(signal_cloud::schema::lib::SignalFrameError),
 
     #[error("meta signal frame error: {0}")]
     MetaFrame(meta_signal_cloud::schema::lib::SignalFrameError),
 
-    #[error("command-line route error: {0}")]
-    CommandLineRoute(#[from] signal_frame::CommandLineRouteError),
-
     #[error("NOTA decode error: {0}")]
     Nota(#[from] nota_next::NotaDecodeError),
-
-    #[error("command-line error: {0}")]
-    CommandLine(#[from] signal_frame::CommandLineError),
 
     #[error("configuration archive decode failed")]
     ConfigurationArchiveDecode,
@@ -124,12 +121,6 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl Error {
-    pub fn command_line_route(error: signal_frame::CommandLineRouteError) -> Self {
-        Self::CommandLineRoute(error)
-    }
-}
-
 impl From<signal_cloud::schema::lib::SignalFrameError> for Error {
     fn from(error: signal_cloud::schema::lib::SignalFrameError) -> Self {
         Self::OrdinaryFrame(error)
@@ -163,7 +154,7 @@ impl DaemonConfiguration {
     }
 }
 
-impl triad_runtime::DaemonConfiguration for DaemonConfiguration {
+impl triad_runtime::BindingSurface for DaemonConfiguration {
     fn socket_path(&self) -> &Path {
         Path::new(&self.ordinary_socket_path)
     }
@@ -173,8 +164,9 @@ impl triad_runtime::DaemonConfiguration for DaemonConfiguration {
     }
 
     /// cloud's live daemon currently builds its provider `Store` without a
-    /// daemon-owned durable database path. The triad-runtime trait still
-    /// exposes the hook for components whose runtime opens storage directly.
+    /// daemon-owned durable database path. The triad-runtime binding surface
+    /// still exposes the hook for components whose runtime opens storage
+    /// directly.
     fn database_path(&self) -> &Path {
         Path::new("")
     }

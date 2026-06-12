@@ -18,7 +18,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use signal_cloud::schema::lib::{Provider, ProviderAccount};
 
-use crate::schema::sema::{AccountBinding, AccountPolicyTable, PlanTable, StateMarker, StoredPlan};
+use crate::schema::sema::{
+    AccountBinding, CommitSequence, CredentialHandle, StateDigest, StateMarker, StoredPlan,
+};
 use crate::{Error, Result};
 
 /// Projects the meta-contract provider into the ordinary-contract provider that
@@ -48,21 +50,11 @@ impl ProviderProjection {
 /// The two SEMA tables plus the monotonic commit sequence, held under one lock
 /// so a single write commits atomically across the tables. The state digest is
 /// modeled as the commit sequence for this in-memory slice.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SchemaStoreState {
-    account_policy: AccountPolicyTable,
-    plans: PlanTable,
+    account_policy: Vec<AccountBinding>,
+    plans: Vec<StoredPlan>,
     commit_sequence: u64,
-}
-
-impl Default for SchemaStoreState {
-    fn default() -> Self {
-        Self {
-            account_policy: AccountPolicyTable(Vec::new()),
-            plans: PlanTable(Vec::new()),
-            commit_sequence: 0,
-        }
-    }
 }
 
 impl SchemaStoreState {
@@ -78,18 +70,15 @@ impl SchemaStoreState {
 
     /// The current state marker (commit sequence doubling as the digest).
     pub fn marker(&self) -> StateMarker {
-        StateMarker {
-            commit_sequence: self.commit_sequence,
-            state_digest: self.commit_sequence,
-        }
+        Self::marker_for(self.commit_sequence)
     }
 
     pub fn accounts(&self) -> &[AccountBinding] {
-        &self.account_policy.0
+        &self.account_policy
     }
 
     pub fn plans(&self) -> &[StoredPlan] {
-        &self.plans.0
+        &self.plans
     }
 
     /// Insert or replace the account binding keyed by provider + account. The
@@ -100,12 +89,11 @@ impl SchemaStoreState {
         let commit_sequence = self.next_commit_sequence();
         match self
             .account_policy
-            .0
             .iter_mut()
             .find(|existing| Self::same_account(existing, &binding))
         {
             Some(existing) => *existing = binding,
-            None => self.account_policy.0.push(binding),
+            None => self.account_policy.push(binding),
         }
         Self::marker_for(commit_sequence)
     }
@@ -117,10 +105,10 @@ impl SchemaStoreState {
         &mut self,
         provider: &Provider,
         provider_account: &ProviderAccount,
-        credential_handle: String,
+        credential_handle: CredentialHandle,
     ) -> Option<StateMarker> {
         let commit_sequence = self.next_commit_sequence();
-        let binding = self.account_policy.0.iter_mut().find(|existing| {
+        let binding = self.account_policy.iter_mut().find(|existing| {
             &existing.provider == provider && &existing.provider_account == provider_account
         })?;
         binding.credential_handle = credential_handle;
@@ -135,11 +123,11 @@ impl SchemaStoreState {
         provider_account: &ProviderAccount,
     ) -> Option<StateMarker> {
         let commit_sequence = self.next_commit_sequence();
-        let before = self.account_policy.0.len();
-        self.account_policy.0.retain(|existing| {
+        let before = self.account_policy.len();
+        self.account_policy.retain(|existing| {
             !(&existing.provider == provider && &existing.provider_account == provider_account)
         });
-        (self.account_policy.0.len() != before).then(|| Self::marker_for(commit_sequence))
+        (self.account_policy.len() != before).then(|| Self::marker_for(commit_sequence))
     }
 
     /// Insert or replace a stored plan keyed by its plan identifier. The
@@ -150,21 +138,19 @@ impl SchemaStoreState {
         let commit_sequence = self.next_commit_sequence();
         match self
             .plans
-            .0
             .iter_mut()
             .find(|existing| existing.plan.identifier == plan.plan.identifier)
         {
             Some(existing) => *existing = plan,
-            None => self.plans.0.push(plan),
+            None => self.plans.push(plan),
         }
         Self::marker_for(commit_sequence)
     }
 
     pub fn plan(&self, identifier: &str) -> Option<&StoredPlan> {
         self.plans
-            .0
             .iter()
-            .find(|stored| stored.plan.identifier.as_str() == identifier)
+            .find(|stored| stored.plan.identifier.payload() == identifier)
     }
 
     /// Mark the plan with the given identifier approved. Returns the post-commit
@@ -173,9 +159,8 @@ impl SchemaStoreState {
         let commit_sequence = self.next_commit_sequence();
         let stored = self
             .plans
-            .0
             .iter_mut()
-            .find(|stored| stored.plan.identifier.as_str() == identifier)?;
+            .find(|stored| stored.plan.identifier.payload() == identifier)?;
         stored.approved = true;
         Some(Self::marker_for(commit_sequence))
     }
@@ -186,8 +171,8 @@ impl SchemaStoreState {
 
     fn marker_for(commit_sequence: u64) -> StateMarker {
         StateMarker {
-            commit_sequence,
-            state_digest: commit_sequence,
+            commit_sequence: CommitSequence::new(commit_sequence),
+            state_digest: StateDigest::new(commit_sequence),
         }
     }
 }

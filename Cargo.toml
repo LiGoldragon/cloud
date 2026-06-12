@@ -19,6 +19,10 @@ path = "src/bin/cloud-daemon.rs"
 name = "cloud"
 path = "src/bin/cloud.rs"
 
+[[bin]]
+name = "meta-cloud"
+path = "src/bin/meta-cloud.rs"
+
 [features]
 default = ["cloudflare"]
 cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
@@ -28,9 +32,9 @@ nota-text = ["signal-cloud/nota-text", "meta-signal-cloud/nota-text"]
 
 [dependencies]
 nota-next         = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
-meta-signal-cloud = { git = "https://github.com/LiGoldragon/meta-signal-cloud.git", branch = "main" }
+meta-signal-cloud = { git = "https://github.com/LiGoldragon/meta-signal-cloud.git", branch = "main", features = ["nota-text"] }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
-signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main" }
+signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main", features = ["nota-text"] }
 signal-domain-criome = { git = "https://github.com/LiGoldragon/signal-domain-criome.git", branch = "main" }
 signal-frame        = { git = "https://github.com/LiGoldragon/signal-frame.git", branch = "main" }
 serde             = { version = "1", features = ["derive"], optional = true }

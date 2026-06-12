@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cloud::client::{CliRequest, CommandLineDispatch, SchemaConnection};
+use cloud::client::{Client, CommandLineInput, SchemaConnection};
 #[cfg(feature = "cloudflare")]
 use cloud::cloudflare::{
     Api as CloudflareApi, ApiRecord, ApiZone, CredentialSource, RecordIdentifier, Token,
@@ -32,7 +32,7 @@ use signal_cloud::{
     DomainNameSystemRecord, ProxyMode, RecordKind, RecordListing, RecordValue, ZoneIdentifier,
 };
 use signal_domain_criome::{Projection, ProjectionQuery, ProjectionScope};
-use signal_frame::{CommandLineSocket, Reply as FrameReply, RequestPayload, SubReply};
+use signal_frame::{Reply as FrameReply, RequestPayload, SubReply};
 
 fn encode_to_text(value: &impl NotaEncode) -> String {
     value.to_nota()
@@ -238,17 +238,18 @@ fn capability_report_from_schema_stream(
     capability: ordinary_schema::Capability,
 ) -> ordinary_schema::CapabilityReport {
     let output = SchemaConnection::new(client_stream)
-        .exchange_working(ordinary_schema::Input::Observe(
-            ordinary_schema::Observation::Capabilities(ordinary_schema::CapabilityQuery {
+        .exchange_working(ordinary_schema::Input::observe(
+            ordinary_schema::Observation::capabilities(ordinary_schema::CapabilityQuery {
                 provider: Some(provider),
                 capability: Some(capability),
             }),
         ))
         .expect("schema request");
     match output {
-        ordinary_schema::Output::Observed(ordinary_schema::ObservationResult::Capabilities(
-            report,
-        )) => report,
+        ordinary_schema::Output::Observed(observed) => match observed.into_payload() {
+            ordinary_schema::ObservationResult::Capabilities(report) => report,
+            other => panic!("unexpected schema output {other:?}"),
+        },
         other => panic!("unexpected schema output {other:?}"),
     }
 }
@@ -322,41 +323,40 @@ fn daemon_process_starts_from_binary_configuration_and_answers_working_request()
 }
 
 #[test]
-fn command_line_dispatch_routes_working_and_meta_heads() {
-    let dispatch = CommandLineDispatch::new();
-
-    assert_eq!(
-        dispatch.route_head("Observe").expect("working head"),
-        CommandLineSocket::Working
-    );
-    assert_eq!(
-        dispatch.route_head("RegisterAccount").expect("meta head"),
-        CommandLineSocket::Meta
-    );
-    assert_eq!(
-        dispatch.route_head("PreparePlan").expect("meta head"),
-        CommandLineSocket::Meta
-    );
-    assert_eq!(
-        dispatch.route_head("PrepareProjection").expect("meta head"),
-        CommandLineSocket::Meta
-    );
-}
-
-#[test]
 fn command_line_request_rejects_flags_and_extra_arguments() {
     assert!(matches!(
-        CliRequest::from_arguments(["--help"]),
+        CommandLineInput::from_arguments(["--help"]),
         Err(cloud::Error::FlagArgument(_))
     ));
     assert!(matches!(
-        CliRequest::from_arguments(["(Observe (Capabilities None None))", "extra"]),
+        CommandLineInput::from_arguments(["(Observe (Capabilities None None))", "extra"]),
         Err(cloud::Error::ExpectedSingleArgument)
     ));
 }
 
 #[test]
-fn command_line_request_decodes_meta_contract_by_head() {
+fn ordinary_command_line_decodes_only_ordinary_contract_operations() {
+    let operation =
+        CloudOperation::Observe(Observation::Capabilities(signal_cloud::CapabilityQuery {
+            provider: Some(Provider::Cloudflare),
+            capability: Some(Capability::DomainNameSystemRecords),
+        }));
+    let text = encode_to_text(&operation);
+
+    match Client::working_input_from_nota(&text).expect("ordinary input") {
+        ordinary_schema::Input::Observe(observe) => {
+            assert!(matches!(
+                observe.into_payload(),
+                ordinary_schema::Observation::Capabilities(_)
+            ));
+        }
+        other => panic!("expected ordinary observe input, got {other:?}"),
+    }
+    assert!(Client::meta_input_from_nota(&text).is_err());
+}
+
+#[test]
+fn meta_command_line_decodes_only_meta_contract_operations() {
     let operation = MetaOperation::RegisterAccount(Registration {
         provider: Provider::Cloudflare,
         account: ProviderAccount::new("primary"),
@@ -364,28 +364,32 @@ fn command_line_request_decodes_meta_contract_by_head() {
     });
     let text = encode_to_text(&operation);
 
-    match CliRequest::from_nota(&text).expect("meta request") {
-        CliRequest::Meta(meta_schema::Input::RegisterAccount(decoded)) => {
+    match Client::meta_input_from_nota(&text).expect("meta input") {
+        meta_schema::Input::RegisterAccount(decoded) => {
+            let decoded = decoded.into_payload();
             assert_eq!(decoded.provider, meta_schema::Provider::Cloudflare);
-            assert_eq!(decoded.provider_account, "primary");
-            assert_eq!(decoded.credential_handle, "cloudflare-dns-token");
+            assert_eq!(decoded.provider_account.payload(), "primary");
+            assert_eq!(decoded.credential_handle.payload(), "cloudflare-dns-token");
         }
-        other => panic!("expected meta request, got {other:?}"),
+        other => panic!("expected meta registration input, got {other:?}"),
     }
+    assert!(Client::working_input_from_nota(&text).is_err());
 }
 
 #[test]
 fn store_answers_schema_capability_observation_through_provider_logic() {
-    let output = Store::new().handle_schema_ordinary_input(ordinary_schema::Input::Observe(
-        ordinary_schema::Observation::Capabilities(ordinary_schema::CapabilityQuery {
+    let output = Store::new().handle_schema_ordinary_input(ordinary_schema::Input::observe(
+        ordinary_schema::Observation::capabilities(ordinary_schema::CapabilityQuery {
             provider: Some(ordinary_schema::Provider::Cloudflare),
             capability: Some(ordinary_schema::Capability::DomainNameSystemRecords),
         }),
     ));
-    let ordinary_schema::Output::Observed(ordinary_schema::ObservationResult::Capabilities(report)) =
-        output
-    else {
-        panic!("unexpected schema output {output:?}");
+    let report = match output {
+        ordinary_schema::Output::Observed(observed) => match observed.into_payload() {
+            ordinary_schema::ObservationResult::Capabilities(report) => report,
+            other => panic!("unexpected schema output {other:?}"),
+        },
+        other => panic!("unexpected schema output {other:?}"),
     };
     let expected_state = if cfg!(feature = "cloudflare") {
         ordinary_schema::CapabilityState::Compiled
@@ -400,16 +404,18 @@ fn store_answers_schema_capability_observation_through_provider_logic() {
 #[test]
 #[cfg(not(feature = "google-cloud"))]
 fn store_reports_not_built_provider_over_schema_input() {
-    let output = Store::new().handle_schema_ordinary_input(ordinary_schema::Input::Observe(
-        ordinary_schema::Observation::Capabilities(ordinary_schema::CapabilityQuery {
+    let output = Store::new().handle_schema_ordinary_input(ordinary_schema::Input::observe(
+        ordinary_schema::Observation::capabilities(ordinary_schema::CapabilityQuery {
             provider: Some(ordinary_schema::Provider::GoogleCloud),
             capability: Some(ordinary_schema::Capability::DomainNameSystemRecords),
         }),
     ));
-    let ordinary_schema::Output::Observed(ordinary_schema::ObservationResult::Capabilities(report)) =
-        output
-    else {
-        panic!("unexpected schema output {output:?}");
+    let report = match output {
+        ordinary_schema::Output::Observed(observed) => match observed.into_payload() {
+            ordinary_schema::ObservationResult::Capabilities(report) => report,
+            other => panic!("unexpected schema output {other:?}"),
+        },
+        other => panic!("unexpected schema output {other:?}"),
     };
 
     assert_eq!(report.payload().len(), 1);
@@ -743,17 +749,17 @@ fn domain_projection_prepares_and_applies_cloudflare_dns_plan() {
 #[cfg(feature = "cloudflare")]
 fn store_answers_schema_meta_registration_through_provider_logic() {
     let (store, _api) = cloudflare_fixture_store(FixtureCredentialSource::available());
-    let output = store.handle_schema_meta_input(meta_schema::Input::RegisterAccount(
+    let output = store.handle_schema_meta_input(meta_schema::Input::register_account(
         meta_schema::Registration {
             provider: meta_schema::Provider::Cloudflare,
-            provider_account: String::from("primary"),
-            credential_handle: String::from("cloudflare-dns-token"),
+            provider_account: meta_schema::ProviderAccount::new("primary"),
+            credential_handle: meta_schema::CredentialHandle::new("cloudflare-dns-token"),
         },
     ));
     match output {
         meta_schema::Output::AccountRegistered(registered) => {
             assert_eq!(registered.provider, meta_schema::Provider::Cloudflare);
-            assert_eq!(registered.provider_account, "primary");
+            assert_eq!(registered.provider_account.payload(), "primary");
         }
         other => panic!("unexpected schema meta output {other:?}"),
     }

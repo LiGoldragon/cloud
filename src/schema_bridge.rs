@@ -13,10 +13,10 @@ impl SchemaCloudInput {
     pub fn from_operation(operation: signal_cloud::Operation) -> Self {
         let input = match operation {
             signal_cloud::Operation::Observe(observation) => {
-                ordinary::Input::Observe(LegacyObservation::new(observation).into_schema())
+                ordinary::Input::observe(LegacyObservation::new(observation).into_schema())
             }
             signal_cloud::Operation::Validate(validation) => {
-                ordinary::Input::Validate(LegacyValidation::new(validation).into_schema())
+                ordinary::Input::validate(LegacyValidation::new(validation).into_schema())
             }
         };
         Self { input }
@@ -28,12 +28,12 @@ impl SchemaCloudInput {
 
     pub fn into_operation(self) -> signal_cloud::Operation {
         match self.input {
-            ordinary::Input::Observe(observation) => {
-                signal_cloud::Operation::Observe(SchemaObservation::new(observation).into_legacy())
-            }
-            ordinary::Input::Validate(validation) => {
-                signal_cloud::Operation::Validate(SchemaValidation::new(validation).into_legacy())
-            }
+            ordinary::Input::Observe(observation) => signal_cloud::Operation::Observe(
+                SchemaObservation::new(observation.into_payload()).into_legacy(),
+            ),
+            ordinary::Input::Validate(validation) => signal_cloud::Operation::Validate(
+                SchemaValidation::new(validation.into_payload()).into_legacy(),
+            ),
         }
     }
 }
@@ -50,17 +50,17 @@ impl SchemaCloudOutput {
     pub fn from_reply(reply: signal_cloud::Reply) -> Self {
         let output = match reply {
             signal_cloud::Reply::Observed(result) => {
-                ordinary::Output::Observed(LegacyObservationResult::new(result).into_schema())
+                ordinary::Output::observed(LegacyObservationResult::new(result).into_schema())
             }
             signal_cloud::Reply::Validated(report) => {
-                ordinary::Output::Validated(LegacyValidationReport::new(report).into_schema())
+                ordinary::Output::validated(LegacyValidationReport::new(report).into_schema())
             }
             signal_cloud::Reply::RequestUnsupported(unsupported) => {
-                ordinary::Output::RequestUnsupported(
+                ordinary::Output::request_unsupported(
                     LegacyUnsupportedRequest::new(unsupported).into_schema(),
                 )
             }
-            signal_cloud::Reply::RequestRejected(rejected) => ordinary::Output::RequestRejected(
+            signal_cloud::Reply::RequestRejected(rejected) => ordinary::Output::request_rejected(
                 LegacyRejectedRequest::new(rejected).into_schema(),
             ),
         };
@@ -73,19 +73,19 @@ impl SchemaCloudOutput {
 
     pub fn into_reply(self) -> signal_cloud::Reply {
         match self.output {
-            ordinary::Output::Observed(result) => {
-                signal_cloud::Reply::Observed(SchemaObservationResult::new(result).into_legacy())
-            }
-            ordinary::Output::Validated(report) => {
-                signal_cloud::Reply::Validated(SchemaValidationReport::new(report).into_legacy())
-            }
+            ordinary::Output::Observed(result) => signal_cloud::Reply::Observed(
+                SchemaObservationResult::new(result.into_payload()).into_legacy(),
+            ),
+            ordinary::Output::Validated(report) => signal_cloud::Reply::Validated(
+                SchemaValidationReport::new(report.into_payload()).into_legacy(),
+            ),
             ordinary::Output::RequestUnsupported(unsupported) => {
                 signal_cloud::Reply::RequestUnsupported(
-                    SchemaUnsupportedRequest::new(unsupported).into_legacy(),
+                    SchemaUnsupportedRequest::new(unsupported.into_payload()).into_legacy(),
                 )
             }
             ordinary::Output::RequestRejected(rejected) => signal_cloud::Reply::RequestRejected(
-                SchemaRejectedRequest::new(rejected).into_legacy(),
+                SchemaRejectedRequest::new(rejected.into_payload()).into_legacy(),
             ),
         }
     }
@@ -103,30 +103,32 @@ impl SchemaMetaInput {
     pub fn from_operation(operation: meta_signal_cloud::Operation) -> Self {
         let input = match operation {
             meta_signal_cloud::Operation::RegisterAccount(registration) => {
-                meta::Input::RegisterAccount(LegacyRegistration::new(registration).into_schema())
+                meta::Input::register_account(LegacyRegistration::new(registration).into_schema())
             }
             meta_signal_cloud::Operation::RotateCredential(rotation) => {
-                meta::Input::RotateCredential(LegacyRotation::new(rotation).into_schema())
+                meta::Input::rotate_credential(LegacyRotation::new(rotation).into_schema())
             }
             meta_signal_cloud::Operation::SetPolicy(policy) => {
-                meta::Input::SetPolicy(LegacyPolicy::new(policy).into_schema())
+                meta::Input::set_policy(LegacyPolicy::new(policy).into_schema())
             }
             meta_signal_cloud::Operation::PreparePlan(preparation) => {
-                meta::Input::PreparePlan(LegacyPlanPreparation::new(preparation).into_schema())
+                meta::Input::prepare_plan(LegacyPlanPreparation::new(preparation).into_schema())
             }
             meta_signal_cloud::Operation::PrepareProjection(preparation) => {
-                meta::Input::PrepareProjection(
+                meta::Input::prepare_projection(
                     LegacyProjectionPreparation::new(preparation).into_schema(),
                 )
             }
-            meta_signal_cloud::Operation::ApprovePlan(approval) => {
-                meta::Input::ApprovePlan(meta::Approval::new(approval.plan.as_str().to_owned()))
-            }
+            meta_signal_cloud::Operation::ApprovePlan(approval) => meta::Input::approve_plan(
+                meta::Approval::new(meta::PlanIdentifier::new(approval.plan.as_str().to_owned())),
+            ),
             meta_signal_cloud::Operation::ApplyPlan(application) => {
-                meta::Input::ApplyPlan(meta::Application::new(application.plan.as_str().to_owned()))
+                meta::Input::apply_plan(meta::Application::new(meta::PlanIdentifier::new(
+                    application.plan.as_str().to_owned(),
+                )))
             }
             meta_signal_cloud::Operation::RetireAccount(retirement) => {
-                meta::Input::RetireAccount(LegacyRetirement::new(retirement).into_schema())
+                meta::Input::retire_account(LegacyRetirement::new(retirement).into_schema())
             }
         };
         Self { input }
@@ -140,37 +142,41 @@ impl SchemaMetaInput {
         match self.input {
             meta::Input::RegisterAccount(registration) => {
                 meta_signal_cloud::Operation::RegisterAccount(
-                    SchemaRegistration::new(registration).into_legacy(),
+                    SchemaRegistration::new(registration.into_payload()).into_legacy(),
                 )
             }
             meta::Input::RotateCredential(rotation) => {
                 meta_signal_cloud::Operation::RotateCredential(
-                    SchemaRotation::new(rotation).into_legacy(),
+                    SchemaRotation::new(rotation.into_payload()).into_legacy(),
                 )
             }
-            meta::Input::SetPolicy(policy) => {
-                meta_signal_cloud::Operation::SetPolicy(SchemaPolicy::new(policy).into_legacy())
-            }
+            meta::Input::SetPolicy(policy) => meta_signal_cloud::Operation::SetPolicy(
+                SchemaPolicy::new(policy.into_payload()).into_legacy(),
+            ),
             meta::Input::PreparePlan(preparation) => meta_signal_cloud::Operation::PreparePlan(
-                SchemaPlanPreparation::new(preparation).into_legacy(),
+                SchemaPlanPreparation::new(preparation.into_payload()).into_legacy(),
             ),
             meta::Input::PrepareProjection(preparation) => {
                 meta_signal_cloud::Operation::PrepareProjection(
-                    SchemaProjectionPreparation::new(preparation).into_legacy(),
+                    SchemaProjectionPreparation::new(preparation.into_payload()).into_legacy(),
                 )
             }
             meta::Input::ApprovePlan(approval) => {
                 meta_signal_cloud::Operation::ApprovePlan(meta_signal_cloud::Approval {
-                    plan: signal_cloud::PlanIdentifier::new(approval.into_payload()),
+                    plan: signal_cloud::PlanIdentifier::new(
+                        approval.into_payload().into_payload().into_payload(),
+                    ),
                 })
             }
             meta::Input::ApplyPlan(application) => {
                 meta_signal_cloud::Operation::ApplyPlan(meta_signal_cloud::Application {
-                    plan: signal_cloud::PlanIdentifier::new(application.into_payload()),
+                    plan: signal_cloud::PlanIdentifier::new(
+                        application.into_payload().into_payload().into_payload(),
+                    ),
                 })
             }
             meta::Input::RetireAccount(retirement) => meta_signal_cloud::Operation::RetireAccount(
-                SchemaRetirement::new(retirement).into_legacy(),
+                SchemaRetirement::new(retirement.into_payload()).into_legacy(),
             ),
         }
     }
@@ -188,32 +194,34 @@ impl SchemaMetaOutput {
     pub fn from_reply(reply: meta_signal_cloud::Reply) -> Self {
         let output = match reply {
             meta_signal_cloud::Reply::AccountRegistered(registered) => {
-                meta::Output::AccountRegistered(
+                meta::Output::account_registered(
                     LegacyAccountRegistered::new(registered).into_schema(),
                 )
             }
             meta_signal_cloud::Reply::CredentialRotated(rotated) => {
-                meta::Output::CredentialRotated(LegacyCredentialRotated::new(rotated).into_schema())
+                meta::Output::credential_rotated(
+                    LegacyCredentialRotated::new(rotated).into_schema(),
+                )
             }
             meta_signal_cloud::Reply::PolicySet(policy) => {
-                meta::Output::PolicySet(meta::PolicySet {
+                meta::Output::policy_set(meta::PolicySet {
                     capability_policy_count: policy.capability_policy_count,
                     zone_policy_count: policy.zone_policy_count,
                 })
             }
             meta_signal_cloud::Reply::PlanPrepared(plan) => {
-                meta::Output::PlanPrepared(LegacyPlan::new(plan).into_meta_schema())
+                meta::Output::plan_prepared(LegacyPlan::new(plan).into_meta_schema())
             }
-            meta_signal_cloud::Reply::PlanApproved(approved) => meta::Output::PlanApproved(
-                meta::PlanApproved::new(approved.plan.as_str().to_owned()),
+            meta_signal_cloud::Reply::PlanApproved(approved) => meta::Output::plan_approved(
+                meta::PlanIdentifier::new(approved.plan.as_str().to_owned()),
             ),
-            meta_signal_cloud::Reply::PlanApplied(applied) => {
-                meta::Output::PlanApplied(meta::PlanApplied::new(applied.plan.as_str().to_owned()))
-            }
+            meta_signal_cloud::Reply::PlanApplied(applied) => meta::Output::plan_applied(
+                meta::PlanIdentifier::new(applied.plan.as_str().to_owned()),
+            ),
             meta_signal_cloud::Reply::AccountRetired(retired) => {
-                meta::Output::AccountRetired(LegacyAccountRetired::new(retired).into_schema())
+                meta::Output::account_retired(LegacyAccountRetired::new(retired).into_schema())
             }
-            meta_signal_cloud::Reply::RequestRejected(rejected) => meta::Output::RequestRejected(
+            meta_signal_cloud::Reply::RequestRejected(rejected) => meta::Output::request_rejected(
                 LegacyMetaRejectedRequest::new(rejected).into_schema(),
             ),
         };
@@ -242,17 +250,17 @@ impl SchemaMetaOutput {
                     zone_policy_count: policy.zone_policy_count,
                 })
             }
-            meta::Output::PlanPrepared(plan) => {
-                meta_signal_cloud::Reply::PlanPrepared(SchemaMetaPlan::new(plan).into_legacy())
-            }
+            meta::Output::PlanPrepared(plan) => meta_signal_cloud::Reply::PlanPrepared(
+                SchemaMetaPlan::new(plan.into_payload()).into_legacy(),
+            ),
             meta::Output::PlanApproved(approved) => {
                 meta_signal_cloud::Reply::PlanApproved(meta_signal_cloud::PlanApproved {
-                    plan: signal_cloud::PlanIdentifier::new(approved.into_payload()),
+                    plan: signal_cloud::PlanIdentifier::new(approved.into_payload().into_payload()),
                 })
             }
             meta::Output::PlanApplied(applied) => {
                 meta_signal_cloud::Reply::PlanApplied(meta_signal_cloud::PlanApplied {
-                    plan: signal_cloud::PlanIdentifier::new(applied.into_payload()),
+                    plan: signal_cloud::PlanIdentifier::new(applied.into_payload().into_payload()),
                 })
             }
             meta::Output::AccountRetired(retired) => meta_signal_cloud::Reply::AccountRetired(
@@ -463,20 +471,22 @@ impl SchemaObservation {
     pub fn into_legacy(self) -> signal_cloud::Observation {
         match self.observation {
             ordinary::Observation::Capabilities(query) => signal_cloud::Observation::Capabilities(
-                SchemaCapabilityQuery::new(query).into_legacy(),
+                SchemaCapabilityQuery::new(query.into_payload()).into_legacy(),
             ),
-            ordinary::Observation::Zones(query) => {
-                signal_cloud::Observation::Zones(SchemaZoneQuery::new(query).into_legacy())
-            }
-            ordinary::Observation::Records(query) => {
-                signal_cloud::Observation::Records(SchemaRecordQuery::new(query).into_legacy())
-            }
-            ordinary::Observation::Redirects(query) => {
-                signal_cloud::Observation::Redirects(SchemaRedirectQuery::new(query).into_legacy())
-            }
+            ordinary::Observation::Zones(query) => signal_cloud::Observation::Zones(
+                SchemaZoneQuery::new(query.into_payload()).into_legacy(),
+            ),
+            ordinary::Observation::Records(query) => signal_cloud::Observation::Records(
+                SchemaRecordQuery::new(query.into_payload()).into_legacy(),
+            ),
+            ordinary::Observation::Redirects(query) => signal_cloud::Observation::Redirects(
+                SchemaRedirectQuery::new(query.into_payload()).into_legacy(),
+            ),
             ordinary::Observation::ObservePlan(query) => {
                 signal_cloud::Observation::Plan(signal_cloud::PlanQuery {
-                    identifier: signal_cloud::PlanIdentifier::new(query.into_payload()),
+                    identifier: signal_cloud::PlanIdentifier::new(
+                        query.into_payload().into_payload().into_payload(),
+                    ),
                 })
             }
         }
@@ -495,20 +505,22 @@ impl LegacyObservation {
     pub fn into_schema(self) -> ordinary::Observation {
         match self.observation {
             signal_cloud::Observation::Capabilities(query) => {
-                ordinary::Observation::Capabilities(LegacyCapabilityQuery::new(query).into_schema())
+                ordinary::Observation::capabilities(LegacyCapabilityQuery::new(query).into_schema())
             }
             signal_cloud::Observation::Zones(query) => {
-                ordinary::Observation::Zones(LegacyZoneQuery::new(query).into_schema())
+                ordinary::Observation::zones(LegacyZoneQuery::new(query).into_schema())
             }
             signal_cloud::Observation::Records(query) => {
-                ordinary::Observation::Records(LegacyRecordQuery::new(query).into_schema())
+                ordinary::Observation::records(LegacyRecordQuery::new(query).into_schema())
             }
             signal_cloud::Observation::Redirects(query) => {
-                ordinary::Observation::Redirects(LegacyRedirectQuery::new(query).into_schema())
+                ordinary::Observation::redirects(LegacyRedirectQuery::new(query).into_schema())
             }
-            signal_cloud::Observation::Plan(query) => ordinary::Observation::ObservePlan(
-                ordinary::PlanQuery::new(query.identifier.as_str().to_owned()),
-            ),
+            signal_cloud::Observation::Plan(query) => {
+                ordinary::Observation::observe_plan(ordinary::PlanQuery::new(
+                    ordinary::PlanIdentifier::new(query.identifier.as_str().to_owned()),
+                ))
+            }
         }
     }
 }
@@ -574,7 +586,10 @@ impl SchemaZoneQuery {
                 .query
                 .provider
                 .map(|provider| SchemaProvider::new(provider).into_legacy()),
-            account: self.query.account.map(signal_cloud::ProviderAccount::new),
+            account: self
+                .query
+                .account
+                .map(|account| signal_cloud::ProviderAccount::new(account.into_payload())),
         }
     }
 }
@@ -597,7 +612,7 @@ impl LegacyZoneQuery {
             account: self
                 .query
                 .account
-                .map(|account| account.as_str().to_owned()),
+                .map(|account| ordinary::ProviderAccount::new(account.as_str().to_owned())),
         }
     }
 }
@@ -614,7 +629,7 @@ impl SchemaRecordQuery {
     pub fn into_legacy(self) -> signal_cloud::RecordQuery {
         signal_cloud::RecordQuery {
             provider: SchemaProvider::new(self.query.provider).into_legacy(),
-            zone: signal_cloud::DomainName::new(self.query.domain_name),
+            zone: signal_cloud::DomainName::new(self.query.domain_name.into_payload()),
         }
     }
 }
@@ -631,7 +646,7 @@ impl LegacyRecordQuery {
     pub fn into_schema(self) -> ordinary::RecordQuery {
         ordinary::RecordQuery {
             provider: LegacyProvider::new(self.query.provider).into_schema(),
-            domain_name: self.query.zone.as_str().to_owned(),
+            domain_name: ordinary::DomainName::new(self.query.zone.as_str().to_owned()),
         }
     }
 }
@@ -648,7 +663,7 @@ impl SchemaRedirectQuery {
     pub fn into_legacy(self) -> signal_cloud::RedirectQuery {
         signal_cloud::RedirectQuery {
             provider: SchemaProvider::new(self.query.provider).into_legacy(),
-            zone: signal_cloud::DomainName::new(self.query.domain_name),
+            zone: signal_cloud::DomainName::new(self.query.domain_name.into_payload()),
         }
     }
 }
@@ -665,7 +680,7 @@ impl LegacyRedirectQuery {
     pub fn into_schema(self) -> ordinary::RedirectQuery {
         ordinary::RedirectQuery {
             provider: LegacyProvider::new(self.query.provider).into_schema(),
-            domain_name: self.query.zone.as_str().to_owned(),
+            domain_name: ordinary::DomainName::new(self.query.zone.as_str().to_owned()),
         }
     }
 }
@@ -714,7 +729,7 @@ impl SchemaDesiredState {
     pub fn into_legacy(self) -> signal_cloud::DesiredState {
         signal_cloud::DesiredState {
             provider: SchemaProvider::new(self.desired.provider).into_legacy(),
-            zone: signal_cloud::DomainName::new(self.desired.domain_name),
+            zone: signal_cloud::DomainName::new(self.desired.domain_name.into_payload()),
             records: self
                 .desired
                 .records
@@ -743,7 +758,7 @@ impl LegacyDesiredState {
     pub fn into_schema(self) -> ordinary::DesiredState {
         ordinary::DesiredState {
             provider: LegacyProvider::new(self.desired.provider).into_schema(),
-            domain_name: self.desired.zone.as_str().to_owned(),
+            domain_name: ordinary::DomainName::new(self.desired.zone.as_str().to_owned()),
             records: self
                 .desired
                 .records
@@ -789,9 +804,9 @@ impl SchemaObservationResult {
                     SchemaRedirectListing::new(listing).into_legacy(),
                 )
             }
-            ordinary::ObservationResult::PlanResult(plan) => {
-                signal_cloud::ObservationResult::Plan(SchemaPlan::new(plan).into_legacy())
-            }
+            ordinary::ObservationResult::PlanResult(plan) => signal_cloud::ObservationResult::Plan(
+                SchemaPlan::new(plan.into_payload()).into_legacy(),
+            ),
         }
     }
 }
@@ -826,7 +841,7 @@ impl LegacyObservationResult {
                 )
             }
             signal_cloud::ObservationResult::Plan(plan) => {
-                ordinary::ObservationResult::PlanResult(LegacyPlan::new(plan).into_schema())
+                ordinary::ObservationResult::plan_result(LegacyPlan::new(plan).into_schema())
             }
         }
     }
@@ -898,9 +913,13 @@ impl SchemaZoneListing {
                 .into_iter()
                 .map(|zone| signal_cloud::Zone {
                     provider: SchemaProvider::new(zone.provider).into_legacy(),
-                    account: signal_cloud::ProviderAccount::new(zone.provider_account),
-                    identifier: signal_cloud::ZoneIdentifier::new(zone.zone_identifier),
-                    name: signal_cloud::DomainName::new(zone.domain_name),
+                    account: signal_cloud::ProviderAccount::new(
+                        zone.provider_account.into_payload(),
+                    ),
+                    identifier: signal_cloud::ZoneIdentifier::new(
+                        zone.zone_identifier.into_payload(),
+                    ),
+                    name: signal_cloud::DomainName::new(zone.domain_name.into_payload()),
                 })
                 .collect(),
         }
@@ -923,9 +942,13 @@ impl LegacyZoneListing {
                 .into_iter()
                 .map(|zone| ordinary::Zone {
                     provider: LegacyProvider::new(zone.provider).into_schema(),
-                    provider_account: zone.account.as_str().to_owned(),
-                    zone_identifier: zone.identifier.as_str().to_owned(),
-                    domain_name: zone.name.as_str().to_owned(),
+                    provider_account: ordinary::ProviderAccount::new(
+                        zone.account.as_str().to_owned(),
+                    ),
+                    zone_identifier: ordinary::ZoneIdentifier::new(
+                        zone.identifier.as_str().to_owned(),
+                    ),
+                    domain_name: ordinary::DomainName::new(zone.name.as_str().to_owned()),
                 })
                 .collect(),
         )
@@ -1025,9 +1048,9 @@ impl SchemaRecord {
 
     pub fn into_legacy(self) -> signal_cloud::DomainNameSystemRecord {
         signal_cloud::DomainNameSystemRecord {
-            name: signal_cloud::DomainName::new(self.record.domain_name),
+            name: signal_cloud::DomainName::new(self.record.domain_name.into_payload()),
             kind: SchemaRecordKind::new(self.record.record_kind).into_legacy(),
-            value: signal_cloud::RecordValue::new(self.record.record_value),
+            value: signal_cloud::RecordValue::new(self.record.record_value.into_payload()),
             proxy_mode: SchemaProxyMode::new(self.record.proxy_mode).into_legacy(),
         }
     }
@@ -1044,18 +1067,18 @@ impl LegacyRecord {
 
     pub fn into_schema(self) -> ordinary::DomainNameSystemRecord {
         ordinary::DomainNameSystemRecord {
-            domain_name: self.record.name.as_str().to_owned(),
+            domain_name: ordinary::DomainName::new(self.record.name.as_str().to_owned()),
             record_kind: LegacyRecordKind::new(self.record.kind).into_schema(),
-            record_value: self.record.value.as_str().to_owned(),
+            record_value: ordinary::RecordValue::new(self.record.value.as_str().to_owned()),
             proxy_mode: LegacyProxyMode::new(self.record.proxy_mode).into_schema(),
         }
     }
 
     pub fn into_meta_schema(self) -> meta::DomainNameSystemRecord {
         meta::DomainNameSystemRecord {
-            name: self.record.name.as_str().to_owned(),
+            name: meta::DomainName::new(self.record.name.as_str().to_owned()),
             record_kind: LegacyRecordKind::new(self.record.kind).into_meta_schema(),
-            content: self.record.value.as_str().to_owned(),
+            content: meta::RecordContent::new(self.record.value.as_str().to_owned()),
         }
     }
 }
@@ -1214,9 +1237,9 @@ impl SchemaRedirect {
 
     pub fn into_legacy(self) -> signal_cloud::RedirectRule {
         signal_cloud::RedirectRule {
-            source: signal_cloud::DomainName::new(self.redirect.domain_name),
+            source: signal_cloud::DomainName::new(self.redirect.domain_name.into_payload()),
             target: signal_cloud::UniformResourceLocator::new(
-                self.redirect.uniform_resource_locator,
+                self.redirect.uniform_resource_locator.into_payload(),
             ),
             status: SchemaRedirectStatus::new(self.redirect.redirect_status).into_legacy(),
             path_treatment: SchemaPathTreatment::new(self.redirect.path_treatment).into_legacy(),
@@ -1235,8 +1258,10 @@ impl LegacyRedirect {
 
     pub fn into_schema(self) -> ordinary::RedirectRule {
         ordinary::RedirectRule {
-            domain_name: self.redirect.source.as_str().to_owned(),
-            uniform_resource_locator: self.redirect.target.as_str().to_owned(),
+            domain_name: ordinary::DomainName::new(self.redirect.source.as_str().to_owned()),
+            uniform_resource_locator: ordinary::UniformResourceLocator::new(
+                self.redirect.target.as_str().to_owned(),
+            ),
             redirect_status: LegacyRedirectStatus::new(self.redirect.status).into_schema(),
             path_treatment: LegacyPathTreatment::new(self.redirect.path_treatment).into_schema(),
         }
@@ -1244,8 +1269,8 @@ impl LegacyRedirect {
 
     pub fn into_meta_schema(self) -> meta::RedirectRule {
         meta::RedirectRule {
-            source: self.redirect.source.as_str().to_owned(),
-            target: self.redirect.target.as_str().to_owned(),
+            source: meta::DomainName::new(self.redirect.source.as_str().to_owned()),
+            target: meta::DomainName::new(self.redirect.target.as_str().to_owned()),
             redirect_status: LegacyRedirectStatus::new(self.redirect.status).into_meta_schema(),
         }
     }
@@ -1343,7 +1368,7 @@ impl SchemaValidationReport {
                 .into_iter()
                 .map(|finding| signal_cloud::ValidationFinding {
                     severity: SchemaFindingSeverity::new(finding.finding_severity).into_legacy(),
-                    message: finding.message,
+                    message: finding.message.into_payload(),
                 })
                 .collect(),
         }
@@ -1366,7 +1391,7 @@ impl LegacyValidationReport {
                 .into_iter()
                 .map(|finding| ordinary::ValidationFinding {
                     finding_severity: LegacyFindingSeverity::new(finding.severity).into_schema(),
-                    message: finding.message,
+                    message: ordinary::Message::new(finding.message),
                 })
                 .collect(),
         )
@@ -1617,8 +1642,12 @@ impl LegacyRegistration {
     pub fn into_schema(self) -> meta::Registration {
         meta::Registration {
             provider: LegacyProvider::new(self.registration.provider).into_meta_schema(),
-            provider_account: self.registration.account.as_str().to_owned(),
-            credential_handle: self.registration.credential.as_str().to_owned(),
+            provider_account: meta::ProviderAccount::new(
+                self.registration.account.as_str().to_owned(),
+            ),
+            credential_handle: meta::CredentialHandle::new(
+                self.registration.credential.as_str().to_owned(),
+            ),
         }
     }
 }
@@ -1635,9 +1664,11 @@ impl SchemaRegistration {
     pub fn into_legacy(self) -> meta_signal_cloud::Registration {
         meta_signal_cloud::Registration {
             provider: MetaSchemaProvider::new(self.registration.provider).into_legacy(),
-            account: signal_cloud::ProviderAccount::new(self.registration.provider_account),
+            account: signal_cloud::ProviderAccount::new(
+                self.registration.provider_account.into_payload(),
+            ),
             credential: meta_signal_cloud::CredentialHandle::new(
-                self.registration.credential_handle,
+                self.registration.credential_handle.into_payload(),
             ),
         }
     }
@@ -1655,8 +1686,10 @@ impl LegacyRotation {
     pub fn into_schema(self) -> meta::Rotation {
         meta::Rotation {
             provider: LegacyProvider::new(self.rotation.provider).into_meta_schema(),
-            provider_account: self.rotation.account.as_str().to_owned(),
-            credential_handle: self.rotation.credential.as_str().to_owned(),
+            provider_account: meta::ProviderAccount::new(self.rotation.account.as_str().to_owned()),
+            credential_handle: meta::CredentialHandle::new(
+                self.rotation.credential.as_str().to_owned(),
+            ),
         }
     }
 }
@@ -1673,8 +1706,12 @@ impl SchemaRotation {
     pub fn into_legacy(self) -> meta_signal_cloud::Rotation {
         meta_signal_cloud::Rotation {
             provider: MetaSchemaProvider::new(self.rotation.provider).into_legacy(),
-            account: signal_cloud::ProviderAccount::new(self.rotation.provider_account),
-            credential: meta_signal_cloud::CredentialHandle::new(self.rotation.credential_handle),
+            account: signal_cloud::ProviderAccount::new(
+                self.rotation.provider_account.into_payload(),
+            ),
+            credential: meta_signal_cloud::CredentialHandle::new(
+                self.rotation.credential_handle.into_payload(),
+            ),
         }
     }
 }
@@ -1696,11 +1733,13 @@ impl LegacyPolicy {
                 .into_iter()
                 .map(|policy| meta::ZonePolicy {
                     provider: LegacyProvider::new(policy.provider).into_meta_schema(),
-                    provider_account: policy.account.as_str().to_owned(),
+                    provider_account: meta::ProviderAccount::new(
+                        policy.account.as_str().to_owned(),
+                    ),
                     allowed_zones: policy
                         .allowed_zones
                         .into_iter()
-                        .map(|zone| zone.as_str().to_owned())
+                        .map(|zone| meta::DomainName::new(zone.as_str().to_owned()))
                         .collect(),
                 })
                 .collect(),
@@ -1710,7 +1749,9 @@ impl LegacyPolicy {
                 .into_iter()
                 .map(|policy| meta::CapabilityPolicy {
                     provider: LegacyProvider::new(policy.provider).into_meta_schema(),
-                    provider_account: policy.account.as_str().to_owned(),
+                    provider_account: meta::ProviderAccount::new(
+                        policy.account.as_str().to_owned(),
+                    ),
                     capability: LegacyCapability::new(policy.capability).into_meta_schema(),
                     capability_directive: LegacyCapabilityDirective::new(policy.directive)
                         .into_schema(),
@@ -1737,11 +1778,13 @@ impl SchemaPolicy {
                 .into_iter()
                 .map(|policy| meta_signal_cloud::ZonePolicy {
                     provider: MetaSchemaProvider::new(policy.provider).into_legacy(),
-                    account: signal_cloud::ProviderAccount::new(policy.provider_account),
+                    account: signal_cloud::ProviderAccount::new(
+                        policy.provider_account.into_payload(),
+                    ),
                     allowed_zones: policy
                         .allowed_zones
                         .into_iter()
-                        .map(signal_cloud::DomainName::new)
+                        .map(|zone| signal_cloud::DomainName::new(zone.into_payload()))
                         .collect(),
                 })
                 .collect(),
@@ -1751,7 +1794,9 @@ impl SchemaPolicy {
                 .into_iter()
                 .map(|policy| meta_signal_cloud::CapabilityPolicy {
                     provider: MetaSchemaProvider::new(policy.provider).into_legacy(),
-                    account: signal_cloud::ProviderAccount::new(policy.provider_account),
+                    account: signal_cloud::ProviderAccount::new(
+                        policy.provider_account.into_payload(),
+                    ),
                     capability: MetaSchemaCapability::new(policy.capability).into_legacy(),
                     directive: SchemaCapabilityDirective::new(policy.capability_directive)
                         .into_legacy(),
@@ -1874,7 +1919,7 @@ impl SchemaMetaDesiredState {
     pub fn into_legacy(self) -> signal_cloud::DesiredState {
         signal_cloud::DesiredState {
             provider: MetaSchemaProvider::new(self.desired.provider).into_legacy(),
-            zone: signal_cloud::DomainName::new(self.desired.zone),
+            zone: signal_cloud::DomainName::new(self.desired.zone.into_payload()),
             records: self
                 .desired
                 .records
@@ -1895,7 +1940,7 @@ impl LegacyDesiredState {
     pub fn into_meta_schema(self) -> meta::DesiredState {
         meta::DesiredState {
             provider: LegacyProvider::new(self.desired.provider).into_meta_schema(),
-            zone: self.desired.zone.as_str().to_owned(),
+            zone: meta::DomainName::new(self.desired.zone.as_str().to_owned()),
             records: self
                 .desired
                 .records
@@ -1923,9 +1968,9 @@ impl SchemaMetaRecord {
 
     pub fn into_legacy(self) -> signal_cloud::DomainNameSystemRecord {
         signal_cloud::DomainNameSystemRecord {
-            name: signal_cloud::DomainName::new(self.record.name),
+            name: signal_cloud::DomainName::new(self.record.name.into_payload()),
             kind: SchemaMetaRecordKind::new(self.record.record_kind).into_legacy(),
-            value: signal_cloud::RecordValue::new(self.record.content),
+            value: signal_cloud::RecordValue::new(self.record.content.into_payload()),
             proxy_mode: signal_cloud::ProxyMode::Direct,
         }
     }
@@ -1942,8 +1987,8 @@ impl SchemaMetaRedirect {
 
     pub fn into_legacy(self) -> signal_cloud::RedirectRule {
         signal_cloud::RedirectRule {
-            source: signal_cloud::DomainName::new(self.redirect.source),
-            target: signal_cloud::UniformResourceLocator::new(self.redirect.target),
+            source: signal_cloud::DomainName::new(self.redirect.source.into_payload()),
+            target: signal_cloud::UniformResourceLocator::new(self.redirect.target.into_payload()),
             status: SchemaMetaRedirectStatus::new(self.redirect.redirect_status).into_legacy(),
             path_treatment: signal_cloud::PathTreatment::Preserve,
         }
@@ -1979,7 +2024,7 @@ impl LegacyDomainProjection {
     pub fn into_schema(self) -> meta::Projection {
         meta::Projection {
             projection_query: meta::ProjectionQuery {
-                domain: self.projection.query.domain.as_str().to_owned(),
+                domain: meta::DomainName::new(self.projection.query.domain.as_str().to_owned()),
                 projection_scope: LegacyDomainProjectionScope::new(self.projection.query.scope)
                     .into_schema(),
             },
@@ -2012,7 +2057,7 @@ impl SchemaDomainProjection {
         signal_domain_criome::Projection {
             query: signal_domain_criome::ProjectionQuery {
                 domain: signal_domain_criome::DomainName::new(
-                    self.projection.projection_query.domain,
+                    self.projection.projection_query.domain.into_payload(),
                 ),
                 scope: SchemaDomainProjectionScope::new(
                     self.projection.projection_query.projection_scope,
@@ -2087,9 +2132,9 @@ impl LegacyDomainRecord {
 
     pub fn into_schema(self) -> meta::DomainNameSystemRecord {
         meta::DomainNameSystemRecord {
-            name: self.record.name.as_str().to_owned(),
+            name: meta::DomainName::new(self.record.name.as_str().to_owned()),
             record_kind: LegacyDomainRecordKind::new(self.record.kind).into_schema(),
-            content: self.record.value.as_str().to_owned(),
+            content: meta::RecordContent::new(self.record.value.as_str().to_owned()),
         }
     }
 }
@@ -2105,9 +2150,9 @@ impl SchemaDomainRecord {
 
     pub fn into_legacy(self) -> signal_domain_criome::DomainNameSystemRecord {
         signal_domain_criome::DomainNameSystemRecord {
-            name: signal_domain_criome::DomainName::new(self.record.name),
+            name: signal_domain_criome::DomainName::new(self.record.name.into_payload()),
             kind: SchemaDomainRecordKind::new(self.record.record_kind).into_legacy(),
-            value: signal_domain_criome::RecordValue::new(self.record.content),
+            value: signal_domain_criome::RecordValue::new(self.record.content.into_payload()),
         }
     }
 }
@@ -2163,8 +2208,8 @@ impl LegacyDomainRedirect {
 
     pub fn into_schema(self) -> meta::RedirectRule {
         meta::RedirectRule {
-            source: self.redirect.source.as_str().to_owned(),
-            target: self.redirect.target.as_str().to_owned(),
+            source: meta::DomainName::new(self.redirect.source.as_str().to_owned()),
+            target: meta::DomainName::new(self.redirect.target.as_str().to_owned()),
             redirect_status: LegacyDomainRedirectStatus::new(self.redirect.status).into_schema(),
         }
     }
@@ -2181,8 +2226,10 @@ impl SchemaDomainRedirect {
 
     pub fn into_legacy(self) -> signal_domain_criome::RedirectRule {
         signal_domain_criome::RedirectRule {
-            source: signal_domain_criome::DomainName::new(self.redirect.source),
-            target: signal_domain_criome::UniformResourceLocator::new(self.redirect.target),
+            source: signal_domain_criome::DomainName::new(self.redirect.source.into_payload()),
+            target: signal_domain_criome::UniformResourceLocator::new(
+                self.redirect.target.into_payload(),
+            ),
             status: SchemaDomainRedirectStatus::new(self.redirect.redirect_status).into_legacy(),
             path_treatment: signal_domain_criome::PathTreatment::Preserve,
         }
@@ -2234,9 +2281,11 @@ impl LegacyPlan {
 
     pub fn into_schema(self) -> ordinary::Plan {
         ordinary::Plan {
-            plan_identifier: self.plan.identifier.as_str().to_owned(),
+            plan_identifier: ordinary::PlanIdentifier::new(
+                self.plan.identifier.as_str().to_owned(),
+            ),
             provider: LegacyProvider::new(self.plan.provider).into_schema(),
-            domain_name: self.plan.zone.as_str().to_owned(),
+            domain_name: ordinary::DomainName::new(self.plan.zone.as_str().to_owned()),
             records_to_create: self
                 .plan
                 .records_to_create
@@ -2253,7 +2302,7 @@ impl LegacyPlan {
                 .plan
                 .record_names_to_delete
                 .into_iter()
-                .map(|name| name.as_str().to_owned())
+                .map(|name| ordinary::DomainName::new(name.as_str().to_owned()))
                 .collect(),
             redirects_to_create: self
                 .plan
@@ -2271,16 +2320,16 @@ impl LegacyPlan {
                 .plan
                 .redirect_sources_to_delete
                 .into_iter()
-                .map(|name| name.as_str().to_owned())
+                .map(|name| ordinary::DomainName::new(name.as_str().to_owned()))
                 .collect(),
         }
     }
 
     pub fn into_meta_schema(self) -> meta::Plan {
         meta::Plan {
-            identifier: self.plan.identifier.as_str().to_owned(),
+            identifier: meta::PlanIdentifier::new(self.plan.identifier.as_str().to_owned()),
             provider: LegacyProvider::new(self.plan.provider).into_meta_schema(),
-            zone: self.plan.zone.as_str().to_owned(),
+            zone: meta::DomainName::new(self.plan.zone.as_str().to_owned()),
             records_to_create: self
                 .plan
                 .records_to_create
@@ -2297,7 +2346,7 @@ impl LegacyPlan {
                 .plan
                 .record_names_to_delete
                 .into_iter()
-                .map(|name| name.as_str().to_owned())
+                .map(|name| meta::DomainName::new(name.as_str().to_owned()))
                 .collect(),
             redirects_to_create: self
                 .plan
@@ -2315,7 +2364,7 @@ impl LegacyPlan {
                 .plan
                 .redirect_sources_to_delete
                 .into_iter()
-                .map(|name| name.as_str().to_owned())
+                .map(|name| meta::DomainName::new(name.as_str().to_owned()))
                 .collect(),
         }
     }
@@ -2332,9 +2381,9 @@ impl SchemaPlan {
 
     pub fn into_legacy(self) -> signal_cloud::Plan {
         signal_cloud::Plan {
-            identifier: signal_cloud::PlanIdentifier::new(self.plan.plan_identifier),
+            identifier: signal_cloud::PlanIdentifier::new(self.plan.plan_identifier.into_payload()),
             provider: SchemaProvider::new(self.plan.provider).into_legacy(),
-            zone: signal_cloud::DomainName::new(self.plan.domain_name),
+            zone: signal_cloud::DomainName::new(self.plan.domain_name.into_payload()),
             records_to_create: self
                 .plan
                 .records_to_create
@@ -2351,7 +2400,7 @@ impl SchemaPlan {
                 .plan
                 .record_names_to_delete
                 .into_iter()
-                .map(signal_cloud::DomainName::new)
+                .map(|name| signal_cloud::DomainName::new(name.into_payload()))
                 .collect(),
             redirects_to_create: self
                 .plan
@@ -2369,7 +2418,7 @@ impl SchemaPlan {
                 .plan
                 .redirect_sources_to_delete
                 .into_iter()
-                .map(signal_cloud::DomainName::new)
+                .map(|name| signal_cloud::DomainName::new(name.into_payload()))
                 .collect(),
         }
     }
@@ -2386,9 +2435,9 @@ impl SchemaMetaPlan {
 
     pub fn into_legacy(self) -> signal_cloud::Plan {
         signal_cloud::Plan {
-            identifier: signal_cloud::PlanIdentifier::new(self.plan.identifier),
+            identifier: signal_cloud::PlanIdentifier::new(self.plan.identifier.into_payload()),
             provider: MetaSchemaProvider::new(self.plan.provider).into_legacy(),
-            zone: signal_cloud::DomainName::new(self.plan.zone),
+            zone: signal_cloud::DomainName::new(self.plan.zone.into_payload()),
             records_to_create: self
                 .plan
                 .records_to_create
@@ -2405,7 +2454,7 @@ impl SchemaMetaPlan {
                 .plan
                 .record_names_to_delete
                 .into_iter()
-                .map(signal_cloud::DomainName::new)
+                .map(|name| signal_cloud::DomainName::new(name.into_payload()))
                 .collect(),
             redirects_to_create: self
                 .plan
@@ -2423,7 +2472,7 @@ impl SchemaMetaPlan {
                 .plan
                 .redirect_sources_to_delete
                 .into_iter()
-                .map(signal_cloud::DomainName::new)
+                .map(|name| signal_cloud::DomainName::new(name.into_payload()))
                 .collect(),
         }
     }
@@ -2441,7 +2490,9 @@ impl LegacyRetirement {
     pub fn into_schema(self) -> meta::Retirement {
         meta::Retirement {
             provider: LegacyProvider::new(self.retirement.provider).into_meta_schema(),
-            provider_account: self.retirement.account.as_str().to_owned(),
+            provider_account: meta::ProviderAccount::new(
+                self.retirement.account.as_str().to_owned(),
+            ),
         }
     }
 }
@@ -2458,7 +2509,9 @@ impl SchemaRetirement {
     pub fn into_legacy(self) -> meta_signal_cloud::Retirement {
         meta_signal_cloud::Retirement {
             provider: MetaSchemaProvider::new(self.retirement.provider).into_legacy(),
-            account: signal_cloud::ProviderAccount::new(self.retirement.provider_account),
+            account: signal_cloud::ProviderAccount::new(
+                self.retirement.provider_account.into_payload(),
+            ),
         }
     }
 }
@@ -2475,7 +2528,9 @@ impl LegacyAccountRegistered {
     pub fn into_schema(self) -> meta::AccountRegistered {
         meta::AccountRegistered {
             provider: LegacyProvider::new(self.registered.provider).into_meta_schema(),
-            provider_account: self.registered.account.as_str().to_owned(),
+            provider_account: meta::ProviderAccount::new(
+                self.registered.account.as_str().to_owned(),
+            ),
         }
     }
 }
@@ -2492,7 +2547,9 @@ impl SchemaAccountRegistered {
     pub fn into_legacy(self) -> meta_signal_cloud::AccountRegistered {
         meta_signal_cloud::AccountRegistered {
             provider: MetaSchemaProvider::new(self.registered.provider).into_legacy(),
-            account: signal_cloud::ProviderAccount::new(self.registered.provider_account),
+            account: signal_cloud::ProviderAccount::new(
+                self.registered.provider_account.into_payload(),
+            ),
         }
     }
 }
@@ -2509,7 +2566,7 @@ impl LegacyCredentialRotated {
     pub fn into_schema(self) -> meta::CredentialRotated {
         meta::CredentialRotated {
             provider: LegacyProvider::new(self.rotated.provider).into_meta_schema(),
-            provider_account: self.rotated.account.as_str().to_owned(),
+            provider_account: meta::ProviderAccount::new(self.rotated.account.as_str().to_owned()),
         }
     }
 }
@@ -2526,7 +2583,9 @@ impl SchemaCredentialRotated {
     pub fn into_legacy(self) -> meta_signal_cloud::CredentialRotated {
         meta_signal_cloud::CredentialRotated {
             provider: MetaSchemaProvider::new(self.rotated.provider).into_legacy(),
-            account: signal_cloud::ProviderAccount::new(self.rotated.provider_account),
+            account: signal_cloud::ProviderAccount::new(
+                self.rotated.provider_account.into_payload(),
+            ),
         }
     }
 }
@@ -2543,7 +2602,7 @@ impl LegacyAccountRetired {
     pub fn into_schema(self) -> meta::AccountRetired {
         meta::AccountRetired {
             provider: LegacyProvider::new(self.retired.provider).into_meta_schema(),
-            provider_account: self.retired.account.as_str().to_owned(),
+            provider_account: meta::ProviderAccount::new(self.retired.account.as_str().to_owned()),
         }
     }
 }
@@ -2560,7 +2619,9 @@ impl SchemaAccountRetired {
     pub fn into_legacy(self) -> meta_signal_cloud::AccountRetired {
         meta_signal_cloud::AccountRetired {
             provider: MetaSchemaProvider::new(self.retired.provider).into_legacy(),
-            account: signal_cloud::ProviderAccount::new(self.retired.provider_account),
+            account: signal_cloud::ProviderAccount::new(
+                self.retired.provider_account.into_payload(),
+            ),
         }
     }
 }
@@ -2578,8 +2639,8 @@ impl LegacyMetaRejectedRequest {
         meta::RequestRejected {
             rejection_reason: LegacyMetaRejectionReason::new(self.rejected.reason).into_schema(),
             database_marker: meta::DatabaseMarker {
-                commit_sequence: 0,
-                state_digest: 0,
+                commit_sequence: meta::CommitSequence::new(0),
+                state_digest: meta::StateDigest::new(0),
             },
         }
     }

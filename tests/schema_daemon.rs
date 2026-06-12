@@ -96,21 +96,24 @@ fn schema_daemon_serves_ordinary_capability_observation_over_socket() {
     let (ordinary_socket_path, _meta_socket_path) = spawn_daemon();
     let mut client = SocketClient::connect(&ordinary_socket_path);
 
-    let output = client.request_ordinary(ordinary::Input::Observe(
-        ordinary::Observation::Capabilities(ordinary::CapabilityQuery {
+    let output = client.request_ordinary(ordinary::Input::observe(
+        ordinary::Observation::capabilities(ordinary::CapabilityQuery {
             provider: Some(ordinary::Provider::Cloudflare),
             capability: Some(ordinary::Capability::DomainNameSystemRecords),
         }),
     ));
 
     match output {
-        ordinary::Output::Observed(ordinary::ObservationResult::Capabilities(report)) => {
-            assert_eq!(report.payload().len(), 1);
-            assert_eq!(
-                report.payload()[0].capability_state,
-                ordinary::CapabilityState::Compiled
-            );
-        }
+        ordinary::Output::Observed(observed) => match observed.into_payload() {
+            ordinary::ObservationResult::Capabilities(report) => {
+                assert_eq!(report.payload().len(), 1);
+                assert_eq!(
+                    report.payload()[0].capability_state,
+                    ordinary::CapabilityState::Compiled
+                );
+            }
+            other => panic!("expected capability observation reply, got {other:?}"),
+        },
         other => panic!("expected capability observation reply, got {other:?}"),
     }
 }
@@ -120,10 +123,10 @@ fn schema_daemon_routes_meta_registration_to_provider_verification() {
     let (_ordinary_socket_path, meta_socket_path) = spawn_daemon();
     let mut client = SocketClient::connect(&meta_socket_path);
 
-    let output = client.request_meta(meta::Input::RegisterAccount(meta::Registration {
+    let output = client.request_meta(meta::Input::register_account(meta::Registration {
         provider: meta::Provider::Cloudflare,
-        provider_account: String::from("primary"),
-        credential_handle: String::from("cloudflare/api-token"),
+        provider_account: meta::ProviderAccount::new("primary"),
+        credential_handle: meta::CredentialHandle::new("cloudflare/api-token"),
     }));
 
     match output {

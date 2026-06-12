@@ -13,6 +13,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       flake-utils,
       fenix,
@@ -32,9 +33,9 @@
           "rust-src"
         ];
         craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
-        schemaFilter = path: type:
-          type == "regular" && pkgs.lib.hasSuffix ".schema" path;
-        sourceFilter = path: type:
+        schemaFilter = path: type: type == "regular" && pkgs.lib.hasSuffix ".schema" path;
+        sourceFilter =
+          path: type:
           type == "directory" || (craneLib.filterCargoSources path type) || (schemaFilter path type);
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
@@ -63,6 +64,7 @@
           // {
             inherit cargoArtifacts;
             nativeBuildInputs = [ pkgs.makeWrapper ];
+            meta.mainProgram = "cloud";
             postInstall = ''
               wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath}
             '';
@@ -87,6 +89,29 @@
           fmt = craneLib.cargoFmt {
             inherit src;
           };
+
+          clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- -D warnings";
+            }
+          );
+        };
+
+        apps.default = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/cloud";
+        };
+
+        apps.daemon = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/cloud-daemon";
+        };
+
+        apps.meta = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/meta-cloud";
         };
 
         devShells.default = pkgs.mkShell {
