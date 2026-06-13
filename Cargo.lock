@@ -560,7 +560,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "meta-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#bdd842e1459274aa76b4241123f3d09530fc5406"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#6bb3e6a843c6c7beb39aa1df853ab9c47e800353"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -846,7 +846,7 @@ dependencies = [
 [[package]]
 name = "schema-rust-next"
 version = "0.5.3"
-source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#7c15bc3fa3d07f4710acca16f14eef1aa68b02dd"
+source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#00763d676d63395d45b5f8a81dbf9a2287574ca9"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -914,7 +914,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#c6e70491c8a7f2e8460cc39ff5fa38c1d881f951"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#da69af974e66e6f9d23c7eacf4edf0ff06fdc272"
 dependencies = [
  "nota-next",
  "rkyv",
