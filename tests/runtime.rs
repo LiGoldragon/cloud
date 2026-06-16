@@ -246,7 +246,7 @@ fn capability_report_from_schema_stream(
         ))
         .expect("schema request");
     match output {
-        ordinary_schema::Output::Observed(observed) => match observed.into_payload() {
+        ordinary_schema::Output::Observed(observed) => match observed {
             ordinary_schema::ObservationResult::Capabilities(report) => report,
             other => panic!("unexpected schema output {other:?}"),
         },
@@ -346,7 +346,7 @@ fn ordinary_command_line_decodes_only_ordinary_contract_operations() {
     match Client::working_input_from_nota(&text).expect("ordinary input") {
         ordinary_schema::Input::Observe(observe) => {
             assert!(matches!(
-                observe.into_payload(),
+                observe,
                 ordinary_schema::Observation::Capabilities(_)
             ));
         }
@@ -366,7 +366,6 @@ fn meta_command_line_decodes_only_meta_contract_operations() {
 
     match Client::meta_input_from_nota(&text).expect("meta input") {
         meta_schema::Input::RegisterAccount(decoded) => {
-            let decoded = decoded.into_payload();
             assert_eq!(decoded.provider, meta_schema::Provider::Cloudflare);
             assert_eq!(decoded.provider_account.payload(), "primary");
             assert_eq!(decoded.credential_handle.payload(), "cloudflare-dns-token");
@@ -385,7 +384,7 @@ fn store_answers_schema_capability_observation_through_provider_logic() {
         }),
     ));
     let report = match output {
-        ordinary_schema::Output::Observed(observed) => match observed.into_payload() {
+        ordinary_schema::Output::Observed(observed) => match observed {
             ordinary_schema::ObservationResult::Capabilities(report) => report,
             other => panic!("unexpected schema output {other:?}"),
         },
@@ -411,7 +410,7 @@ fn store_reports_not_built_provider_over_schema_input() {
         }),
     ));
     let report = match output {
-        ordinary_schema::Output::Observed(observed) => match observed.into_payload() {
+        ordinary_schema::Output::Observed(observed) => match observed {
             ordinary_schema::ObservationResult::Capabilities(report) => report,
             other => panic!("unexpected schema output {other:?}"),
         },

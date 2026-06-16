@@ -55,7 +55,7 @@ fn ordinary_capability_observation_flows_through_generated_nexus_and_sema() {
     match reply {
         nexus::NexusAction::ReplyToSignal(reply) => match reply.into_payload() {
             nexus::SignalOutput::OrdinaryOutput(ordinary::Output::Observed(observed)) => {
-                match observed.into_payload() {
+                match observed {
                     ordinary::ObservationResult::Capabilities(report) => {
                         assert_eq!(report.payload().len(), 1);
                     }

@@ -20,8 +20,8 @@
   PlanIdentifier meta-signal-cloud:lib:PlanIdentifier
   PlanApplied meta-signal-cloud:lib:PlanApplied
 }
-[NexusWork]
-[NexusAction]
+[(NexusWork NexusWork)]
+[(NexusAction NexusAction)]
 {
   SignalArrived SignalInput
   SemaReadCompleted SemaReadOutput

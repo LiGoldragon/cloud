@@ -15,9 +15,11 @@ impl SchemaCloudInput {
             signal_cloud::Operation::Observe(observation) => {
                 ordinary::Input::observe(LegacyObservation::new(observation).into_schema())
             }
-            signal_cloud::Operation::Validate(validation) => {
-                ordinary::Input::validate(LegacyValidation::new(validation).into_schema())
-            }
+            signal_cloud::Operation::Validate(validation) => ordinary::Input::validate(
+                LegacyValidation::new(validation)
+                    .into_schema()
+                    .into_payload(),
+            ),
         };
         Self { input }
     }
@@ -28,12 +30,12 @@ impl SchemaCloudInput {
 
     pub fn into_operation(self) -> signal_cloud::Operation {
         match self.input {
-            ordinary::Input::Observe(observation) => signal_cloud::Operation::Observe(
-                SchemaObservation::new(observation.into_payload()).into_legacy(),
-            ),
-            ordinary::Input::Validate(validation) => signal_cloud::Operation::Validate(
-                SchemaValidation::new(validation.into_payload()).into_legacy(),
-            ),
+            ordinary::Input::Observe(observation) => {
+                signal_cloud::Operation::Observe(SchemaObservation::new(observation).into_legacy())
+            }
+            ordinary::Input::Validate(validation) => {
+                signal_cloud::Operation::Validate(SchemaValidation::new(validation).into_legacy())
+            }
         }
     }
 }
@@ -52,16 +54,20 @@ impl SchemaCloudOutput {
             signal_cloud::Reply::Observed(result) => {
                 ordinary::Output::observed(LegacyObservationResult::new(result).into_schema())
             }
-            signal_cloud::Reply::Validated(report) => {
-                ordinary::Output::validated(LegacyValidationReport::new(report).into_schema())
-            }
+            signal_cloud::Reply::Validated(report) => ordinary::Output::validated(
+                LegacyValidationReport::new(report)
+                    .into_schema()
+                    .into_payload(),
+            ),
             signal_cloud::Reply::RequestUnsupported(unsupported) => {
                 ordinary::Output::request_unsupported(
                     LegacyUnsupportedRequest::new(unsupported).into_schema(),
                 )
             }
             signal_cloud::Reply::RequestRejected(rejected) => ordinary::Output::request_rejected(
-                LegacyRejectedRequest::new(rejected).into_schema(),
+                LegacyRejectedRequest::new(rejected)
+                    .into_schema()
+                    .into_payload(),
             ),
         };
         Self { output }
@@ -73,19 +79,19 @@ impl SchemaCloudOutput {
 
     pub fn into_reply(self) -> signal_cloud::Reply {
         match self.output {
-            ordinary::Output::Observed(result) => signal_cloud::Reply::Observed(
-                SchemaObservationResult::new(result.into_payload()).into_legacy(),
-            ),
-            ordinary::Output::Validated(report) => signal_cloud::Reply::Validated(
-                SchemaValidationReport::new(report.into_payload()).into_legacy(),
-            ),
+            ordinary::Output::Observed(result) => {
+                signal_cloud::Reply::Observed(SchemaObservationResult::new(result).into_legacy())
+            }
+            ordinary::Output::Validated(report) => {
+                signal_cloud::Reply::Validated(SchemaValidationReport::new(report).into_legacy())
+            }
             ordinary::Output::RequestUnsupported(unsupported) => {
                 signal_cloud::Reply::RequestUnsupported(
-                    SchemaUnsupportedRequest::new(unsupported.into_payload()).into_legacy(),
+                    SchemaUnsupportedRequest::new(unsupported).into_legacy(),
                 )
             }
             ordinary::Output::RequestRejected(rejected) => signal_cloud::Reply::RequestRejected(
-                SchemaRejectedRequest::new(rejected.into_payload()).into_legacy(),
+                SchemaRejectedRequest::new(rejected).into_legacy(),
             ),
         }
     }
@@ -111,22 +117,22 @@ impl SchemaMetaInput {
             meta_signal_cloud::Operation::SetPolicy(policy) => {
                 meta::Input::set_policy(LegacyPolicy::new(policy).into_schema())
             }
-            meta_signal_cloud::Operation::PreparePlan(preparation) => {
-                meta::Input::prepare_plan(LegacyPlanPreparation::new(preparation).into_schema())
-            }
+            meta_signal_cloud::Operation::PreparePlan(preparation) => meta::Input::prepare_plan(
+                LegacyPlanPreparation::new(preparation)
+                    .into_schema()
+                    .into_payload(),
+            ),
             meta_signal_cloud::Operation::PrepareProjection(preparation) => {
                 meta::Input::prepare_projection(
                     LegacyProjectionPreparation::new(preparation).into_schema(),
                 )
             }
             meta_signal_cloud::Operation::ApprovePlan(approval) => meta::Input::approve_plan(
-                meta::Approval::new(meta::PlanIdentifier::new(approval.plan.as_str().to_owned())),
+                meta::PlanIdentifier::new(approval.plan.as_str().to_owned()),
             ),
-            meta_signal_cloud::Operation::ApplyPlan(application) => {
-                meta::Input::apply_plan(meta::Application::new(meta::PlanIdentifier::new(
-                    application.plan.as_str().to_owned(),
-                )))
-            }
+            meta_signal_cloud::Operation::ApplyPlan(application) => meta::Input::apply_plan(
+                meta::PlanIdentifier::new(application.plan.as_str().to_owned()),
+            ),
             meta_signal_cloud::Operation::RetireAccount(retirement) => {
                 meta::Input::retire_account(LegacyRetirement::new(retirement).into_schema())
             }
@@ -142,41 +148,39 @@ impl SchemaMetaInput {
         match self.input {
             meta::Input::RegisterAccount(registration) => {
                 meta_signal_cloud::Operation::RegisterAccount(
-                    SchemaRegistration::new(registration.into_payload()).into_legacy(),
+                    SchemaRegistration::new(registration).into_legacy(),
                 )
             }
             meta::Input::RotateCredential(rotation) => {
                 meta_signal_cloud::Operation::RotateCredential(
-                    SchemaRotation::new(rotation.into_payload()).into_legacy(),
+                    SchemaRotation::new(rotation).into_legacy(),
                 )
             }
-            meta::Input::SetPolicy(policy) => meta_signal_cloud::Operation::SetPolicy(
-                SchemaPolicy::new(policy.into_payload()).into_legacy(),
-            ),
+            meta::Input::SetPolicy(policy) => {
+                meta_signal_cloud::Operation::SetPolicy(SchemaPolicy::new(policy).into_legacy())
+            }
             meta::Input::PreparePlan(preparation) => meta_signal_cloud::Operation::PreparePlan(
-                SchemaPlanPreparation::new(preparation.into_payload()).into_legacy(),
+                SchemaPlanPreparation::new(preparation).into_legacy(),
             ),
             meta::Input::PrepareProjection(preparation) => {
                 meta_signal_cloud::Operation::PrepareProjection(
-                    SchemaProjectionPreparation::new(preparation.into_payload()).into_legacy(),
+                    SchemaProjectionPreparation::new(preparation).into_legacy(),
                 )
             }
             meta::Input::ApprovePlan(approval) => {
                 meta_signal_cloud::Operation::ApprovePlan(meta_signal_cloud::Approval {
-                    plan: signal_cloud::PlanIdentifier::new(
-                        approval.into_payload().into_payload().into_payload(),
-                    ),
+                    plan: signal_cloud::PlanIdentifier::new(approval.into_payload().into_payload()),
                 })
             }
             meta::Input::ApplyPlan(application) => {
                 meta_signal_cloud::Operation::ApplyPlan(meta_signal_cloud::Application {
                     plan: signal_cloud::PlanIdentifier::new(
-                        application.into_payload().into_payload().into_payload(),
+                        application.into_payload().into_payload(),
                     ),
                 })
             }
             meta::Input::RetireAccount(retirement) => meta_signal_cloud::Operation::RetireAccount(
-                SchemaRetirement::new(retirement.into_payload()).into_legacy(),
+                SchemaRetirement::new(retirement).into_legacy(),
             ),
         }
     }

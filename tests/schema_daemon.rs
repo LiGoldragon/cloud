@@ -104,7 +104,7 @@ fn schema_daemon_serves_ordinary_capability_observation_over_socket() {
     ));
 
     match output {
-        ordinary::Output::Observed(observed) => match observed.into_payload() {
+        ordinary::Output::Observed(observed) => match observed {
             ordinary::ObservationResult::Capabilities(report) => {
                 assert_eq!(report.payload().len(), 1);
                 assert_eq!(

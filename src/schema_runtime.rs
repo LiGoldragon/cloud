@@ -137,41 +137,31 @@ impl SchemaRuntime {
 
     fn decide_ordinary_input(&self, input: ordinary::Input) -> nexus::NexusAction {
         match input {
-            ordinary::Input::Observe(observation) => nexus::NexusAction::command_sema_read(
-                sema::SemaReadInput::observe(observation.into_payload()),
-            ),
-            ordinary::Input::Validate(validation) => nexus::NexusAction::command_sema_read(
-                sema::SemaReadInput::validate(validation.into_payload()),
-            ),
+            ordinary::Input::Observe(observation) => {
+                nexus::NexusAction::command_sema_read(sema::SemaReadInput::observe(observation))
+            }
+            ordinary::Input::Validate(validation) => {
+                nexus::NexusAction::command_sema_read(sema::SemaReadInput::validate(validation))
+            }
         }
     }
 
     fn decide_meta_input(&self, input: meta::Input) -> nexus::NexusAction {
         let command = match input {
             meta::Input::RegisterAccount(payload) => {
-                sema::SemaWriteInput::register_account(payload.into_payload())
+                sema::SemaWriteInput::register_account(payload)
             }
             meta::Input::RotateCredential(payload) => {
-                sema::SemaWriteInput::rotate_credential(payload.into_payload())
+                sema::SemaWriteInput::rotate_credential(payload)
             }
-            meta::Input::SetPolicy(payload) => {
-                sema::SemaWriteInput::set_policy(payload.into_payload())
-            }
-            meta::Input::PreparePlan(payload) => {
-                sema::SemaWriteInput::prepare_plan(payload.into_payload())
-            }
+            meta::Input::SetPolicy(payload) => sema::SemaWriteInput::set_policy(payload),
+            meta::Input::PreparePlan(payload) => sema::SemaWriteInput::prepare_plan(payload),
             meta::Input::PrepareProjection(payload) => {
-                sema::SemaWriteInput::prepare_projection(payload.into_payload())
+                sema::SemaWriteInput::prepare_projection(payload)
             }
-            meta::Input::ApprovePlan(payload) => {
-                sema::SemaWriteInput::approve_plan(payload.into_payload())
-            }
-            meta::Input::ApplyPlan(payload) => {
-                sema::SemaWriteInput::apply_plan(payload.into_payload())
-            }
-            meta::Input::RetireAccount(payload) => {
-                sema::SemaWriteInput::retire_account(payload.into_payload())
-            }
+            meta::Input::ApprovePlan(payload) => sema::SemaWriteInput::approve_plan(payload),
+            meta::Input::ApplyPlan(payload) => sema::SemaWriteInput::apply_plan(payload),
+            meta::Input::RetireAccount(payload) => sema::SemaWriteInput::retire_account(payload),
         };
         nexus::NexusAction::command_sema_write(command)
     }
@@ -182,7 +172,7 @@ impl SchemaRuntime {
                 ordinary::Output::observed(payload.into_payload())
             }
             sema::SemaReadOutput::Validated(payload) => {
-                ordinary::Output::validated(payload.into_payload())
+                ordinary::Output::validated(payload.into_payload().into_payload())
             }
             sema::SemaReadOutput::PlanObserved(payload) => ordinary::Output::observed(
                 ordinary::ObservationResult::plan_result(payload.into_payload().into_payload()),
@@ -246,9 +236,7 @@ impl SchemaRuntime {
     }
 
     fn ordinary_plan_expired_rejection() -> ordinary::Output {
-        ordinary::Output::request_rejected(ordinary::RejectedRequest::new(
-            ordinary::RejectionReason::PlanExpired,
-        ))
+        ordinary::Output::request_rejected(ordinary::RejectionReason::PlanExpired)
     }
 
     // ---- sema observe (the read path over the durable tables) -----------

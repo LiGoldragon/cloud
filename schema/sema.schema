@@ -31,8 +31,10 @@
   ProviderAccount signal-cloud:lib:ProviderAccount
   CredentialHandle meta-signal-cloud:lib:CredentialHandle
 }
-[SemaReadInput SemaWriteInput]
-[SemaReadOutput SemaWriteOutput]
+[(SemaReadInput SemaReadInput)
+ (SemaWriteInput SemaWriteInput)]
+[(SemaReadOutput SemaReadOutput)
+ (SemaWriteOutput SemaWriteOutput)]
 {
   SemaReadInput [(Observe Observe) (ObservePlan ObservePlan) (Validate Validate)]
   Observe Observation
@@ -57,12 +59,12 @@
 
   RejectionReport { reason RejectionReason marker StateMarker }
   RejectionReason [ProviderNotConfigured AccountUnknown PlanUnknown PlanNotApproved CapabilityUnauthorized ProviderRateLimited ProviderUnavailable]
-  StateMarker { CommitSequence * StateDigest * }
+  StateMarker { commit_sequence CommitSequence state_digest StateDigest }
   CommitSequence Integer
   StateDigest Integer
 
-  AccountPolicyTable { bindings (Vec AccountBinding) }
-  AccountBinding { Provider * ProviderAccount * CredentialHandle * }
-  PlanTable { plans (Vec StoredPlan) }
+  AccountPolicyTable (Vector AccountBinding)
+  AccountBinding { provider Provider provider_account ProviderAccount credential_handle CredentialHandle }
+  PlanTable (Vector StoredPlan)
   StoredPlan { plan Plan approved Boolean marker StateMarker }
 }
