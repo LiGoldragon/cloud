@@ -183,7 +183,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -559,7 +559,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "meta-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#1719bc485d980e1cb7def60f309d64daace0a3e1"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#604dbcd42471aae112d50f6ea9e320f9dc202717"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -788,7 +788,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -860,7 +860,7 @@ dependencies = [
 [[package]]
 name = "schema-rust-next"
 version = "0.5.3"
-source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#cad9ec27767bdf74d4835d1b00528cf525eda7f6"
+source = "git+https://github.com/LiGoldragon/schema-rust-next.git?branch=main#6e04d70ff679181938c50b6a5488035efa0979b8"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -928,7 +928,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#878f9e7982a5968c94396683927ca32ec430916f"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#007a811bd40c1267731b7681efaf406d0650d026"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -939,7 +939,7 @@ dependencies = [
 [[package]]
 name = "signal-domain-criome"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-domain-criome.git?branch=main#b4096539a4fe59303a6b042400cad61b08c64a17"
+source = "git+https://github.com/LiGoldragon/signal-domain-criome.git?branch=main#3d611b40eb4545fc45bd7405d49581f2b54c6e53"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -950,7 +950,7 @@ dependencies = [
 [[package]]
 name = "signal-frame"
 version = "0.2.1"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#166bda84dc63bf8461fff11a41c43d6a1c92a941"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#e2eae5c28dac47eea6c4c641b60c4fd27bb547d8"
 dependencies = [
  "paste",
  "rkyv",
@@ -961,7 +961,7 @@ dependencies = [
 [[package]]
 name = "signal-frame-macros"
 version = "0.1.1"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#166bda84dc63bf8461fff11a41c43d6a1c92a941"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#e2eae5c28dac47eea6c4c641b60c4fd27bb547d8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1046,7 +1046,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1155,7 +1155,7 @@ dependencies = [
 [[package]]
 name = "triad-runtime"
 version = "0.6.1"
-source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#7a84034b81148abe0105fb103d782d82c45c170f"
+source = "git+https://github.com/LiGoldragon/triad-runtime.git?branch=main#f46f66ee4f16d5774c6c3889e1d3c162ddac3811"
 dependencies = [
  "kameo",
  "rkyv",
