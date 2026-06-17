@@ -122,6 +122,13 @@ impl SchemaMetaInput {
                     .into_schema()
                     .into_payload(),
             ),
+            meta_signal_cloud::Operation::PrepareHostPlan(preparation) => {
+                meta::Input::prepare_host_plan(
+                    LegacyHostPlanPreparation::new(preparation)
+                        .into_schema()
+                        .into_payload(),
+                )
+            }
             meta_signal_cloud::Operation::PrepareProjection(preparation) => {
                 meta::Input::prepare_projection(
                     LegacyProjectionPreparation::new(preparation).into_schema(),
@@ -162,6 +169,11 @@ impl SchemaMetaInput {
             meta::Input::PreparePlan(preparation) => meta_signal_cloud::Operation::PreparePlan(
                 SchemaPlanPreparation::new(preparation).into_legacy(),
             ),
+            meta::Input::PrepareHostPlan(preparation) => {
+                meta_signal_cloud::Operation::PrepareHostPlan(
+                    SchemaHostPlanPreparation::new(preparation).into_legacy(),
+                )
+            }
             meta::Input::PrepareProjection(preparation) => {
                 meta_signal_cloud::Operation::PrepareProjection(
                     SchemaProjectionPreparation::new(preparation).into_legacy(),
@@ -216,6 +228,9 @@ impl SchemaMetaOutput {
             meta_signal_cloud::Reply::PlanPrepared(plan) => {
                 meta::Output::plan_prepared(LegacyPlan::new(plan).into_meta_schema())
             }
+            meta_signal_cloud::Reply::HostPlanPrepared(plan) => {
+                meta::Output::host_plan_prepared(LegacyHostPlan::new(plan).into_meta_schema())
+            }
             meta_signal_cloud::Reply::PlanApproved(approved) => meta::Output::plan_approved(
                 meta::PlanIdentifier::new(approved.plan.as_str().to_owned()),
             ),
@@ -256,6 +271,9 @@ impl SchemaMetaOutput {
             }
             meta::Output::PlanPrepared(plan) => meta_signal_cloud::Reply::PlanPrepared(
                 SchemaMetaPlan::new(plan.into_payload()).into_legacy(),
+            ),
+            meta::Output::HostPlanPrepared(plan) => meta_signal_cloud::Reply::HostPlanPrepared(
+                SchemaMetaHostPlan::new(plan.into_payload()).into_legacy(),
             ),
             meta::Output::PlanApproved(approved) => {
                 meta_signal_cloud::Reply::PlanApproved(meta_signal_cloud::PlanApproved {
@@ -486,6 +504,9 @@ impl SchemaObservation {
             ordinary::Observation::Redirects(query) => signal_cloud::Observation::Redirects(
                 SchemaRedirectQuery::new(query.into_payload()).into_legacy(),
             ),
+            ordinary::Observation::ObserveServers(query) => signal_cloud::Observation::Servers(
+                SchemaHostQuery::new(query.into_payload()).into_legacy(),
+            ),
             ordinary::Observation::ObservePlan(query) => {
                 signal_cloud::Observation::Plan(signal_cloud::PlanQuery {
                     identifier: signal_cloud::PlanIdentifier::new(
@@ -519,6 +540,9 @@ impl LegacyObservation {
             }
             signal_cloud::Observation::Redirects(query) => {
                 ordinary::Observation::redirects(LegacyRedirectQuery::new(query).into_schema())
+            }
+            signal_cloud::Observation::Servers(query) => {
+                ordinary::Observation::observe_servers(LegacyHostQuery::new(query).into_schema())
             }
             signal_cloud::Observation::Plan(query) => {
                 ordinary::Observation::observe_plan(ordinary::PlanQuery::new(
@@ -808,6 +832,11 @@ impl SchemaObservationResult {
                     SchemaRedirectListing::new(listing).into_legacy(),
                 )
             }
+            ordinary::ObservationResult::Servers(listing) => {
+                signal_cloud::ObservationResult::Servers(
+                    SchemaCloudHostListing::new(listing).into_legacy(),
+                )
+            }
             ordinary::ObservationResult::PlanResult(plan) => signal_cloud::ObservationResult::Plan(
                 SchemaPlan::new(plan.into_payload()).into_legacy(),
             ),
@@ -842,6 +871,11 @@ impl LegacyObservationResult {
             signal_cloud::ObservationResult::Redirects(listing) => {
                 ordinary::ObservationResult::Redirects(
                     LegacyRedirectListing::new(listing).into_schema(),
+                )
+            }
+            signal_cloud::ObservationResult::Servers(listing) => {
+                ordinary::ObservationResult::Servers(
+                    LegacyCloudHostListing::new(listing).into_schema(),
                 )
             }
             signal_cloud::ObservationResult::Plan(plan) => {
@@ -2730,6 +2764,330 @@ impl SchemaMetaRejectionReason {
             meta::RejectionReason::CapabilityUnauthorized => {
                 meta_signal_cloud::RejectionReason::CapabilityUnauthorized
             }
+        }
+    }
+}
+
+struct SchemaHostQuery {
+    query: ordinary::HostQuery,
+}
+
+impl SchemaHostQuery {
+    pub fn new(query: ordinary::HostQuery) -> Self {
+        Self { query }
+    }
+
+    pub fn into_legacy(self) -> signal_cloud::HostQuery {
+        signal_cloud::HostQuery {
+            provider: SchemaProvider::new(self.query.provider).into_legacy(),
+            account: self
+                .query
+                .provider_account
+                .map(|account| signal_cloud::ProviderAccount::new(account.into_payload())),
+        }
+    }
+}
+
+struct LegacyHostQuery {
+    query: signal_cloud::HostQuery,
+}
+
+impl LegacyHostQuery {
+    pub fn new(query: signal_cloud::HostQuery) -> Self {
+        Self { query }
+    }
+
+    pub fn into_schema(self) -> ordinary::HostQuery {
+        ordinary::HostQuery {
+            provider: LegacyProvider::new(self.query.provider).into_schema(),
+            provider_account: self
+                .query
+                .account
+                .map(|account| ordinary::ProviderAccount::new(account.as_str().to_owned())),
+        }
+    }
+}
+
+struct SchemaCloudHostListing {
+    listing: ordinary::CloudHostListing,
+}
+
+impl SchemaCloudHostListing {
+    pub fn new(listing: ordinary::CloudHostListing) -> Self {
+        Self { listing }
+    }
+
+    pub fn into_legacy(self) -> signal_cloud::CloudHostListing {
+        signal_cloud::CloudHostListing {
+            hosts: self
+                .listing
+                .into_payload()
+                .into_iter()
+                .map(|host| SchemaCloudHost::new(host).into_legacy())
+                .collect(),
+        }
+    }
+}
+
+struct LegacyCloudHostListing {
+    listing: signal_cloud::CloudHostListing,
+}
+
+impl LegacyCloudHostListing {
+    pub fn new(listing: signal_cloud::CloudHostListing) -> Self {
+        Self { listing }
+    }
+
+    pub fn into_schema(self) -> ordinary::CloudHostListing {
+        ordinary::CloudHostListing::new(
+            self.listing
+                .hosts
+                .into_iter()
+                .map(|host| LegacyCloudHost::new(host).into_schema())
+                .collect(),
+        )
+    }
+}
+
+struct SchemaCloudHost {
+    host: ordinary::CloudHost,
+}
+
+impl SchemaCloudHost {
+    pub fn new(host: ordinary::CloudHost) -> Self {
+        Self { host }
+    }
+
+    pub fn into_legacy(self) -> signal_cloud::CloudHost {
+        signal_cloud::CloudHost {
+            provider: SchemaProvider::new(self.host.provider).into_legacy(),
+            account: signal_cloud::ProviderAccount::new(self.host.provider_account.into_payload()),
+            identifier: signal_cloud::HostIdentifier::new(self.host.host_identifier.into_payload()),
+            name: signal_cloud::DomainName::new(self.host.host_name.into_payload()),
+            server_type: signal_cloud::ServerType::new(self.host.server_type.into_payload()),
+            image: signal_cloud::ImageName::new(self.host.image_name.into_payload()),
+            ipv4: signal_cloud::IpAddress::new(self.host.ipv4_address.into_payload()),
+            status: SchemaHostStatus::new(self.host.host_status).into_legacy(),
+        }
+    }
+}
+
+struct LegacyCloudHost {
+    host: signal_cloud::CloudHost,
+}
+
+impl LegacyCloudHost {
+    pub fn new(host: signal_cloud::CloudHost) -> Self {
+        Self { host }
+    }
+
+    pub fn into_schema(self) -> ordinary::CloudHost {
+        ordinary::CloudHost {
+            provider: LegacyProvider::new(self.host.provider).into_schema(),
+            provider_account: ordinary::ProviderAccount::new(self.host.account.as_str().to_owned()),
+            host_identifier: ordinary::HostIdentifier::new(
+                self.host.identifier.as_str().to_owned(),
+            ),
+            host_name: ordinary::DomainName::new(self.host.name.as_str().to_owned()),
+            server_type: ordinary::ServerType::new(self.host.server_type.as_str().to_owned()),
+            image_name: ordinary::ImageName::new(self.host.image.as_str().to_owned()),
+            ipv4_address: ordinary::IpAddress::new(self.host.ipv4.as_str().to_owned()),
+            host_status: LegacyHostStatus::new(self.host.status).into_schema(),
+        }
+    }
+}
+
+struct SchemaHostStatus {
+    status: ordinary::HostStatus,
+}
+
+impl SchemaHostStatus {
+    pub fn new(status: ordinary::HostStatus) -> Self {
+        Self { status }
+    }
+
+    pub fn into_legacy(self) -> signal_cloud::HostStatus {
+        match self.status {
+            ordinary::HostStatus::Initializing => signal_cloud::HostStatus::Initializing,
+            ordinary::HostStatus::Running => signal_cloud::HostStatus::Running,
+            ordinary::HostStatus::Stopped => signal_cloud::HostStatus::Stopped,
+            ordinary::HostStatus::Deleting => signal_cloud::HostStatus::Deleting,
+            ordinary::HostStatus::Unknown => signal_cloud::HostStatus::Unknown,
+        }
+    }
+}
+
+struct LegacyHostStatus {
+    status: signal_cloud::HostStatus,
+}
+
+impl LegacyHostStatus {
+    pub fn new(status: signal_cloud::HostStatus) -> Self {
+        Self { status }
+    }
+
+    pub fn into_schema(self) -> ordinary::HostStatus {
+        match self.status {
+            signal_cloud::HostStatus::Initializing => ordinary::HostStatus::Initializing,
+            signal_cloud::HostStatus::Running => ordinary::HostStatus::Running,
+            signal_cloud::HostStatus::Stopped => ordinary::HostStatus::Stopped,
+            signal_cloud::HostStatus::Deleting => ordinary::HostStatus::Deleting,
+            signal_cloud::HostStatus::Unknown => ordinary::HostStatus::Unknown,
+        }
+    }
+}
+
+struct LegacyHostPlanPreparation {
+    preparation: meta_signal_cloud::HostPlanPreparation,
+}
+
+impl LegacyHostPlanPreparation {
+    pub fn new(preparation: meta_signal_cloud::HostPlanPreparation) -> Self {
+        Self { preparation }
+    }
+
+    pub fn into_schema(self) -> meta::HostPlanPreparation {
+        meta::HostPlanPreparation::new(
+            LegacyDesiredHostState::new(self.preparation.desired_host_state).into_meta_schema(),
+        )
+    }
+}
+
+struct SchemaHostPlanPreparation {
+    preparation: meta::HostPlanPreparation,
+}
+
+impl SchemaHostPlanPreparation {
+    pub fn new(preparation: meta::HostPlanPreparation) -> Self {
+        Self { preparation }
+    }
+
+    pub fn into_legacy(self) -> meta_signal_cloud::HostPlanPreparation {
+        meta_signal_cloud::HostPlanPreparation {
+            desired_host_state: SchemaMetaDesiredHostState::new(self.preparation.into_payload())
+                .into_legacy(),
+        }
+    }
+}
+
+struct LegacyDesiredHostState {
+    desired: meta_signal_cloud::DesiredHostState,
+}
+
+impl LegacyDesiredHostState {
+    pub fn new(desired: meta_signal_cloud::DesiredHostState) -> Self {
+        Self { desired }
+    }
+
+    pub fn into_meta_schema(self) -> meta::DesiredHostState {
+        meta::DesiredHostState {
+            provider: LegacyProvider::new(self.desired.provider).into_meta_schema(),
+            host_name: meta::DomainName::new(self.desired.host_name.as_str().to_owned()),
+            server_type: meta::ServerType::new(self.desired.server_type.as_str().to_owned()),
+            image_name: meta::ImageName::new(self.desired.image_name.as_str().to_owned()),
+            ssh_key_name: meta::SshKeyName::new(self.desired.ssh_key_name.as_str().to_owned()),
+        }
+    }
+}
+
+struct SchemaMetaDesiredHostState {
+    desired: meta::DesiredHostState,
+}
+
+impl SchemaMetaDesiredHostState {
+    pub fn new(desired: meta::DesiredHostState) -> Self {
+        Self { desired }
+    }
+
+    pub fn into_legacy(self) -> meta_signal_cloud::DesiredHostState {
+        meta_signal_cloud::DesiredHostState {
+            provider: MetaSchemaProvider::new(self.desired.provider).into_legacy(),
+            host_name: signal_cloud::DomainName::new(self.desired.host_name.into_payload()),
+            server_type: meta_signal_cloud::ServerType::new(
+                self.desired.server_type.into_payload(),
+            ),
+            image_name: meta_signal_cloud::ImageName::new(self.desired.image_name.into_payload()),
+            ssh_key_name: meta_signal_cloud::SshKeyName::new(
+                self.desired.ssh_key_name.into_payload(),
+            ),
+        }
+    }
+}
+
+struct LegacyHostPlan {
+    plan: meta_signal_cloud::HostPlan,
+}
+
+impl LegacyHostPlan {
+    pub fn new(plan: meta_signal_cloud::HostPlan) -> Self {
+        Self { plan }
+    }
+
+    pub fn into_meta_schema(self) -> meta::HostPlan {
+        meta::HostPlan {
+            identifier: meta::PlanIdentifier::new(self.plan.identifier.as_str().to_owned()),
+            provider: LegacyProvider::new(self.plan.provider).into_meta_schema(),
+            host_name: meta::DomainName::new(self.plan.host_name.as_str().to_owned()),
+            server_type: meta::ServerType::new(self.plan.server_type.as_str().to_owned()),
+            image_name: meta::ImageName::new(self.plan.image_name.as_str().to_owned()),
+            ssh_key_name: meta::SshKeyName::new(self.plan.ssh_key_name.as_str().to_owned()),
+            intent: LegacyHostIntent::new(self.plan.intent).into_meta_schema(),
+        }
+    }
+}
+
+struct SchemaMetaHostPlan {
+    plan: meta::HostPlan,
+}
+
+impl SchemaMetaHostPlan {
+    pub fn new(plan: meta::HostPlan) -> Self {
+        Self { plan }
+    }
+
+    pub fn into_legacy(self) -> meta_signal_cloud::HostPlan {
+        meta_signal_cloud::HostPlan {
+            identifier: signal_cloud::PlanIdentifier::new(self.plan.identifier.into_payload()),
+            provider: MetaSchemaProvider::new(self.plan.provider).into_legacy(),
+            host_name: signal_cloud::DomainName::new(self.plan.host_name.into_payload()),
+            server_type: meta_signal_cloud::ServerType::new(self.plan.server_type.into_payload()),
+            image_name: meta_signal_cloud::ImageName::new(self.plan.image_name.into_payload()),
+            ssh_key_name: meta_signal_cloud::SshKeyName::new(self.plan.ssh_key_name.into_payload()),
+            intent: SchemaMetaHostIntent::new(self.plan.intent).into_legacy(),
+        }
+    }
+}
+
+struct LegacyHostIntent {
+    intent: meta_signal_cloud::HostIntent,
+}
+
+impl LegacyHostIntent {
+    pub fn new(intent: meta_signal_cloud::HostIntent) -> Self {
+        Self { intent }
+    }
+
+    pub fn into_meta_schema(self) -> meta::HostIntent {
+        match self.intent {
+            meta_signal_cloud::HostIntent::Create => meta::HostIntent::Create,
+            meta_signal_cloud::HostIntent::Destroy => meta::HostIntent::Destroy,
+        }
+    }
+}
+
+struct SchemaMetaHostIntent {
+    intent: meta::HostIntent,
+}
+
+impl SchemaMetaHostIntent {
+    pub fn new(intent: meta::HostIntent) -> Self {
+        Self { intent }
+    }
+
+    pub fn into_legacy(self) -> meta_signal_cloud::HostIntent {
+        match self.intent {
+            meta::HostIntent::Create => meta_signal_cloud::HostIntent::Create,
+            meta::HostIntent::Destroy => meta_signal_cloud::HostIntent::Destroy,
         }
     }
 }

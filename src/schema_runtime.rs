@@ -156,6 +156,17 @@ impl SchemaRuntime {
             }
             meta::Input::SetPolicy(payload) => sema::SemaWriteInput::set_policy(payload),
             meta::Input::PreparePlan(payload) => sema::SemaWriteInput::prepare_plan(payload),
+            // Host plan preparation is not carried by the experimental schema
+            // engine in Phase 1 — the live provider `Store` owns host plans.
+            // Reply with the honest rejection rather than fabricating a host
+            // plan on this plane.
+            meta::Input::PrepareHostPlan(_) => {
+                return nexus::NexusAction::reply_to_signal(nexus::SignalOutput::meta_output(
+                    meta::Output::request_rejected(
+                        self.meta_rejection(meta::RejectionReason::ProviderNotConfigured),
+                    ),
+                ));
+            }
             meta::Input::PrepareProjection(payload) => {
                 sema::SemaWriteInput::prepare_projection(payload)
             }
@@ -268,6 +279,9 @@ impl SchemaRuntime {
             }
             ordinary::Observation::Redirects(_) => {
                 ordinary::ObservationResult::Redirects(ordinary::RedirectListing::new(Vec::new()))
+            }
+            ordinary::Observation::ObserveServers(_) => {
+                ordinary::ObservationResult::Servers(ordinary::CloudHostListing::new(Vec::new()))
             }
             ordinary::Observation::ObservePlan(query) => {
                 return self.observe_plan(query.into_payload());

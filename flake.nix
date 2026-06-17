@@ -55,7 +55,23 @@
               --run 'CF_API_TOKEN=$(${pkgs.gopass}/bin/gopass show -o cloudflare/api-token) || { echo "cloud: cannot fetch CF_API_TOKEN from gopass cloudflare/api-token" >&2; exit 78; }; export CF_API_TOKEN'
           '';
         };
-        cloudRuntimePath = pkgs.lib.makeBinPath [ cloudflareCli ];
+        # Hetzner Phase 1 reads the REST API in-process, so unlike flarectl the
+        # daemon never shells out to a Hetzner CLI for create/observe/destroy.
+        # The shim injects HCLOUD_TOKEN from gopass and keeps the hcloud CLI on
+        # PATH for operator debugging.
+        hetznerCli = pkgs.symlinkJoin {
+          name = "hcloud-gopass-wrapped";
+          paths = [ pkgs.hcloud ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/hcloud \
+              --run 'HCLOUD_TOKEN=$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token) || { echo "cloud: cannot fetch HCLOUD_TOKEN from gopass hetzner/api-token" >&2; exit 78; }; export HCLOUD_TOKEN'
+          '';
+        };
+        cloudRuntimePath = pkgs.lib.makeBinPath [
+          cloudflareCli
+          hetznerCli
+        ];
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
       in
       {
@@ -66,7 +82,8 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             meta.mainProgram = "cloud";
             postInstall = ''
-              wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath}
+              wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath} \
+                --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}'
             '';
           }
         );
@@ -118,6 +135,7 @@
           name = "cloud";
           packages = [
             cloudflareCli
+            hetznerCli
             pkgs.jujutsu
             toolchain
           ];

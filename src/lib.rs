@@ -8,15 +8,16 @@ use std::sync::Mutex;
 
 use meta_signal_cloud::{
     AccountRegistered, AccountRetired, Application, Approval, CredentialRotated,
-    Operation as MetaOperation, PlanApproved, PlanPreparation, PolicySet, ProjectionPreparation,
-    Registration, Reply as MetaReply, RequestRejected as MetaRequestRejected, Retirement, Rotation,
+    HostPlanPreparation, Operation as MetaOperation, PlanApproved, PlanPreparation, PolicySet,
+    ProjectionPreparation, Registration, Reply as MetaReply,
+    RequestRejected as MetaRequestRejected, Retirement, Rotation,
 };
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use signal_cloud::{
     Capability, CapabilityObservation, CapabilityQuery, CapabilityReport, CapabilityState,
-    DesiredState, DomainName, DomainNameSystemRecord, FindingSeverity, Observation,
-    ObservationResult, Operation as CloudOperation, Plan, PlanIdentifier, PlanQuery, Provider,
-    RecordKind, RecordListing, RecordQuery, Reply as CloudReply, RequestRejected,
+    CloudHostListing, DesiredState, DomainName, DomainNameSystemRecord, FindingSeverity, HostQuery,
+    Observation, ObservationResult, Operation as CloudOperation, Plan, PlanIdentifier, PlanQuery,
+    Provider, RecordKind, RecordListing, RecordQuery, Reply as CloudReply, RequestRejected,
     RequestUnsupported, UnsupportedReason, ValidationFinding, ValidationReport, Zone, ZoneListing,
     ZoneQuery,
 };
@@ -32,6 +33,8 @@ pub mod cloudflare;
 #[cfg(feature = "cloudflare")]
 pub mod cloudflare_cli;
 pub mod daemon_command;
+#[cfg(feature = "hetzner")]
+pub mod hetzner;
 pub mod schema;
 mod schema_bridge;
 pub mod schema_daemon;
@@ -117,6 +120,10 @@ pub enum Error {
     #[cfg(feature = "cloudflare")]
     #[error("Cloudflare provider error: {0}")]
     Cloudflare(#[from] cloudflare::Error),
+
+    #[cfg(feature = "hetzner")]
+    #[error("Hetzner provider error: {0}")]
+    Hetzner(#[from] hetzner::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -524,11 +531,14 @@ pub struct Store {
     accounts: Mutex<Vec<AccountBinding>>,
     policy: Mutex<meta_signal_cloud::Policy>,
     plans: Mutex<Vec<Plan>>,
+    host_plans: Mutex<Vec<meta_signal_cloud::HostPlan>>,
     approved_plans: Mutex<Vec<PlanIdentifier>>,
     last_known_zones: Mutex<Vec<Zone>>,
     last_known_records: Mutex<Vec<CachedRecordListing>>,
     #[cfg(feature = "cloudflare")]
     cloudflare: cloudflare::ProviderClient,
+    #[cfg(feature = "hetzner")]
+    hetzner: hetzner::ProviderClient,
 }
 
 impl Default for Store {
@@ -541,6 +551,8 @@ impl Store {
     pub fn new() -> Self {
         #[cfg(feature = "cloudflare")]
         let cloudflare = cloudflare::ProviderClient::production();
+        #[cfg(feature = "hetzner")]
+        let hetzner = hetzner::ProviderClient::production();
         Self::with_parts(
             Vec::new(),
             meta_signal_cloud::Policy {
@@ -549,6 +561,8 @@ impl Store {
             },
             #[cfg(feature = "cloudflare")]
             cloudflare,
+            #[cfg(feature = "hetzner")]
+            hetzner,
         )
     }
 
@@ -561,35 +575,43 @@ impl Store {
                 capabilities: Vec::new(),
             },
             cloudflare,
+            #[cfg(feature = "hetzner")]
+            hetzner::ProviderClient::production(),
         )
     }
 
-    #[cfg(feature = "cloudflare")]
+    #[cfg(feature = "hetzner")]
+    pub fn with_hetzner_provider(hetzner: hetzner::ProviderClient) -> Self {
+        Self::with_parts(
+            Vec::new(),
+            meta_signal_cloud::Policy {
+                zones: Vec::new(),
+                capabilities: Vec::new(),
+            },
+            #[cfg(feature = "cloudflare")]
+            cloudflare::ProviderClient::production(),
+            hetzner,
+        )
+    }
+
     fn with_parts(
         accounts: Vec<AccountBinding>,
         policy: meta_signal_cloud::Policy,
-        cloudflare: cloudflare::ProviderClient,
+        #[cfg(feature = "cloudflare")] cloudflare: cloudflare::ProviderClient,
+        #[cfg(feature = "hetzner")] hetzner: hetzner::ProviderClient,
     ) -> Self {
         Self {
             accounts: Mutex::new(accounts),
             policy: Mutex::new(policy),
             plans: Mutex::new(Vec::new()),
+            host_plans: Mutex::new(Vec::new()),
             approved_plans: Mutex::new(Vec::new()),
             last_known_zones: Mutex::new(Vec::new()),
             last_known_records: Mutex::new(Vec::new()),
+            #[cfg(feature = "cloudflare")]
             cloudflare,
-        }
-    }
-
-    #[cfg(not(feature = "cloudflare"))]
-    fn with_parts(accounts: Vec<AccountBinding>, policy: meta_signal_cloud::Policy) -> Self {
-        Self {
-            accounts: Mutex::new(accounts),
-            policy: Mutex::new(policy),
-            plans: Mutex::new(Vec::new()),
-            approved_plans: Mutex::new(Vec::new()),
-            last_known_zones: Mutex::new(Vec::new()),
-            last_known_records: Mutex::new(Vec::new()),
+            #[cfg(feature = "hetzner")]
+            hetzner,
         }
     }
 
@@ -655,6 +677,7 @@ impl Store {
             }
             Observation::Zones(query) => self.observe_zones(query),
             Observation::Records(query) => self.observe_records(query),
+            Observation::Servers(query) => self.observe_servers(query),
             Observation::Redirects(query) => {
                 if let Some(reply) =
                     self.unsupported_provider_reply(query.provider, Some(Capability::RedirectRules))
@@ -763,6 +786,71 @@ impl Store {
         CloudReply::Observed(ObservationResult::Records(RecordListing {
             records: vec![],
         }))
+    }
+
+    fn observe_servers(&self, query: HostQuery) -> CloudReply {
+        if let Some(reply) =
+            self.unsupported_provider_reply(query.provider, Some(Capability::CloudHosts))
+        {
+            return reply;
+        }
+        if !Self::provider_supports_capability(query.provider, Capability::CloudHosts) {
+            return CloudReply::RequestUnsupported(RequestUnsupported {
+                provider: Some(query.provider),
+                capability: Some(Capability::CloudHosts),
+                reason: UnsupportedReason::CapabilityNotCompiled,
+            });
+        }
+        if !self.provider_is_configured(query.provider) {
+            return CloudReply::RequestUnsupported(RequestUnsupported {
+                provider: Some(query.provider),
+                capability: Some(Capability::CloudHosts),
+                reason: UnsupportedReason::ProviderNotConfigured,
+            });
+        }
+        #[cfg(feature = "hetzner")]
+        if query.provider == Provider::Hetzner {
+            return self.observe_hetzner_hosts(query.account);
+        }
+        CloudReply::Observed(ObservationResult::Servers(CloudHostListing {
+            hosts: vec![],
+        }))
+    }
+
+    #[cfg(feature = "hetzner")]
+    fn observe_hetzner_hosts(
+        &self,
+        account: Option<meta_signal_cloud::ProviderAccount>,
+    ) -> CloudReply {
+        match self.hetzner_host_listing(account) {
+            Ok(listing) => CloudReply::Observed(ObservationResult::Servers(listing)),
+            Err(hetzner::Error::CredentialUnavailable(_)) => {
+                CloudReply::RequestUnsupported(RequestUnsupported {
+                    provider: Some(Provider::Hetzner),
+                    capability: Some(Capability::CloudHosts),
+                    reason: UnsupportedReason::ProviderNotConfigured,
+                })
+            }
+            Err(_) => CloudReply::RequestRejected(RequestRejected {
+                reason: signal_cloud::RejectionReason::ProviderUnavailable,
+            }),
+        }
+    }
+
+    #[cfg(feature = "hetzner")]
+    fn hetzner_host_listing(
+        &self,
+        account: Option<meta_signal_cloud::ProviderAccount>,
+    ) -> hetzner::Result<CloudHostListing> {
+        let bindings = self.account_bindings(Provider::Hetzner, account);
+        let mut hosts = Vec::new();
+        for binding in bindings {
+            hosts.extend(
+                self.hetzner
+                    .observe_hosts(&binding.credential, &binding.account)?,
+            );
+        }
+        Ok(CloudHostListing { hosts })
     }
 
     fn zones(&self) -> ZoneListing {
@@ -904,7 +992,7 @@ impl Store {
             .ok_or_else(|| cloudflare::Error::ZoneNotFound(zone.as_str().to_owned()))
     }
 
-    #[cfg(feature = "cloudflare")]
+    #[cfg(any(feature = "cloudflare", feature = "hetzner"))]
     fn account_bindings(
         &self,
         provider: Provider,
@@ -1083,6 +1171,49 @@ impl Store {
         MetaReply::PlanPrepared(plan)
     }
 
+    fn prepare_host_plan(&self, preparation: HostPlanPreparation) -> MetaReply {
+        let meta_signal_cloud::DesiredHostState {
+            provider,
+            host_name,
+            server_type,
+            image_name,
+            ssh_key_name,
+        } = preparation.desired_host_state;
+        if !Self::provider_is_built(provider) {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        }
+        if !self.provider_is_configured(provider) {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        }
+        if !Self::provider_supports_capability(provider, Capability::CloudHosts) {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::CapabilityUnauthorized,
+            });
+        }
+        let plan = meta_signal_cloud::HostPlan {
+            identifier: PlanIdentifier::new(format!(
+                "{}-{:?}-host-plan",
+                host_name.as_str(),
+                provider
+            )),
+            provider,
+            host_name,
+            server_type,
+            image_name,
+            ssh_key_name,
+            intent: meta_signal_cloud::HostIntent::Create,
+        };
+        self.host_plans
+            .lock()
+            .expect("host plans mutex")
+            .push(plan.clone());
+        MetaReply::HostPlanPrepared(plan)
+    }
+
     fn record_plan_for(
         &self,
         provider: Provider,
@@ -1127,6 +1258,7 @@ impl Store {
             MetaOperation::RotateCredential(rotation) => self.rotate_credential(rotation),
             MetaOperation::SetPolicy(policy) => self.set_policy(policy),
             MetaOperation::PreparePlan(preparation) => self.prepare_plan(preparation),
+            MetaOperation::PrepareHostPlan(preparation) => self.prepare_host_plan(preparation),
             MetaOperation::PrepareProjection(preparation) => self.prepare_projection(preparation),
             MetaOperation::ApprovePlan(approval) => self.approve_plan(approval),
             MetaOperation::ApplyPlan(application) => self.apply_plan(application),
@@ -1193,7 +1325,7 @@ impl Store {
     }
 
     fn approve_plan(&self, approval: Approval) -> MetaReply {
-        if !self.plan_exists(&approval.plan) {
+        if !self.plan_exists(&approval.plan) && !self.host_plan_exists(&approval.plan) {
             return MetaReply::RequestRejected(MetaRequestRejected {
                 reason: meta_signal_cloud::RejectionReason::PlanUnknown,
             });
@@ -1208,6 +1340,9 @@ impl Store {
     }
 
     fn apply_plan(&self, application: Application) -> MetaReply {
+        if let Some(host_plan) = self.host_plan_for_identifier(&application.plan) {
+            return self.apply_host_plan(application, host_plan);
+        }
         let Some(plan) = self.plan_for_identifier(&application.plan) else {
             return MetaReply::RequestRejected(MetaRequestRejected {
                 reason: meta_signal_cloud::RejectionReason::PlanUnknown,
@@ -1280,6 +1415,92 @@ impl Store {
             cloudflare::Error::RequestFailed(_)
             | cloudflare::Error::RequestRejected(_)
             | cloudflare::Error::UnsupportedRecordKind(_) => {
+                meta_signal_cloud::RejectionReason::PlanGenerationFailed
+            }
+        };
+        MetaReply::RequestRejected(MetaRequestRejected { reason })
+    }
+
+    fn apply_host_plan(
+        &self,
+        application: Application,
+        plan: meta_signal_cloud::HostPlan,
+    ) -> MetaReply {
+        if !self
+            .approved_plans
+            .lock()
+            .expect("approved plans mutex")
+            .iter()
+            .any(|approved| approved == &application.plan)
+        {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::PlanNotApproved,
+            });
+        }
+        self.apply_hetzner_host_plan(plan)
+    }
+
+    #[cfg(feature = "hetzner")]
+    fn apply_hetzner_host_plan(&self, plan: meta_signal_cloud::HostPlan) -> MetaReply {
+        if plan.provider != Provider::Hetzner {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        }
+        let Some(binding) = self
+            .account_bindings(Provider::Hetzner, None)
+            .into_iter()
+            .next()
+        else {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        };
+        let outcome = match plan.intent {
+            meta_signal_cloud::HostIntent::Create => self
+                .hetzner
+                .create_host(
+                    &binding.credential,
+                    &binding.account,
+                    &hetzner::ServerSpec {
+                        name: plan.host_name.as_str().to_owned(),
+                        server_type: plan.server_type.as_str().to_owned(),
+                        image: plan.image_name.as_str().to_owned(),
+                        ssh_key_ids: Vec::new(),
+                        location: None,
+                    },
+                )
+                .map(|_| ()),
+            meta_signal_cloud::HostIntent::Destroy => self.hetzner.destroy_host(
+                &binding.credential,
+                &signal_cloud::HostIdentifier::new(plan.host_name.as_str().to_owned()),
+            ),
+        };
+        match outcome {
+            Ok(()) => MetaReply::PlanApplied(meta_signal_cloud::PlanApplied {
+                plan: plan.identifier,
+            }),
+            Err(error) => Self::meta_reply_for_hetzner_error(error),
+        }
+    }
+
+    #[cfg(not(feature = "hetzner"))]
+    fn apply_hetzner_host_plan(&self, _plan: meta_signal_cloud::HostPlan) -> MetaReply {
+        MetaReply::RequestRejected(MetaRequestRejected {
+            reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+        })
+    }
+
+    #[cfg(feature = "hetzner")]
+    fn meta_reply_for_hetzner_error(error: hetzner::Error) -> MetaReply {
+        let reason = match error {
+            hetzner::Error::CredentialUnavailable(_) => {
+                meta_signal_cloud::RejectionReason::CredentialHandleUnknown
+            }
+            hetzner::Error::HostNotFound(_) => {
+                meta_signal_cloud::RejectionReason::ProviderNotConfigured
+            }
+            hetzner::Error::RequestFailed(_) | hetzner::Error::RequestRejected(_) => {
                 meta_signal_cloud::RejectionReason::PlanGenerationFailed
             }
         };
@@ -1371,6 +1592,22 @@ impl Store {
         self.plans
             .lock()
             .expect("plans mutex")
+            .iter()
+            .find(|plan| &plan.identifier == identifier)
+            .cloned()
+    }
+
+    fn host_plan_exists(&self, identifier: &PlanIdentifier) -> bool {
+        self.host_plan_for_identifier(identifier).is_some()
+    }
+
+    fn host_plan_for_identifier(
+        &self,
+        identifier: &PlanIdentifier,
+    ) -> Option<meta_signal_cloud::HostPlan> {
+        self.host_plans
+            .lock()
+            .expect("host plans mutex")
             .iter()
             .find(|plan| &plan.identifier == identifier)
             .cloned()
