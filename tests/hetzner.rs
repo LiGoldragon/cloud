@@ -126,7 +126,7 @@ fn create_host_maps_hetzner_server_to_cloud_host() {
         name: "edge-two".to_owned(),
         server_type: "cx32".to_owned(),
         image: "debian-12".to_owned(),
-        ssh_key_ids: vec![99],
+        ssh_keys: vec!["operator".to_owned()],
         location: Some("fsn1".to_owned()),
     };
 
@@ -200,7 +200,7 @@ fn create_host_surfaces_missing_credential() {
         name: "edge-two".to_owned(),
         server_type: "cx32".to_owned(),
         image: "debian-12".to_owned(),
-        ssh_key_ids: Vec::new(),
+        ssh_keys: Vec::new(),
         location: None,
     };
 
@@ -316,4 +316,39 @@ fn store_prepares_and_applies_a_host_create_plan() {
         api.created.lock().expect("created")[0].name,
         "edge-three".to_owned()
     );
+    // The plan's ssh_key_name was threaded into the Hetzner create call, so the
+    // server is born with the durable key attached and is SSH-able on boot.
+    assert_eq!(
+        api.created.lock().expect("created")[0].ssh_keys,
+        vec!["operator".to_owned()]
+    );
+}
+
+#[test]
+fn destroy_host_by_name_resolves_identifier_before_delete() {
+    let api = Arc::new(FixtureHetznerApi::new());
+    let client = provider_client(api.clone());
+    let credential = CredentialHandle::new("HCLOUD_TOKEN");
+
+    client
+        .destroy_host_by_name(&credential, "edge-one")
+        .expect("destroy host by name");
+
+    // "edge-one" resolved to its Hetzner id 4711 before the delete call — the
+    // delete endpoint needs the numeric id, never the node name.
+    assert_eq!(api.deleted(), vec!["4711".to_owned()]);
+    assert!(api.servers.lock().expect("servers").is_empty());
+}
+
+#[test]
+fn destroy_host_by_name_treats_missing_host_as_already_gone() {
+    let api = Arc::new(FixtureHetznerApi::new());
+    let client = provider_client(api.clone());
+    let credential = CredentialHandle::new("HCLOUD_TOKEN");
+
+    client
+        .destroy_host_by_name(&credential, "absent-host")
+        .expect("missing host is already gone");
+
+    assert!(api.deleted().is_empty());
 }

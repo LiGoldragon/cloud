@@ -1466,15 +1466,14 @@ impl Store {
                         name: plan.host_name.as_str().to_owned(),
                         server_type: plan.server_type.as_str().to_owned(),
                         image: plan.image_name.as_str().to_owned(),
-                        ssh_key_ids: Vec::new(),
+                        ssh_keys: vec![plan.ssh_key_name.as_str().to_owned()],
                         location: None,
                     },
                 )
                 .map(|_| ()),
-            meta_signal_cloud::HostIntent::Destroy => self.hetzner.destroy_host(
-                &binding.credential,
-                &signal_cloud::HostIdentifier::new(plan.host_name.as_str().to_owned()),
-            ),
+            meta_signal_cloud::HostIntent::Destroy => self
+                .hetzner
+                .destroy_host_by_name(&binding.credential, plan.host_name.as_str()),
         };
         match outcome {
             Ok(()) => MetaReply::PlanApplied(meta_signal_cloud::PlanApplied {

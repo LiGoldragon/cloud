@@ -80,7 +80,10 @@ pub struct ServerSpec {
     pub name: String,
     pub server_type: String,
     pub image: String,
-    pub ssh_key_ids: Vec<i64>,
+    /// Hetzner SSH-key names (its `ssh_keys` create field accepts names); the
+    /// key must already exist in the project, so the durable CriomOS root key
+    /// is registered once as a project resource and referenced here by name.
+    pub ssh_keys: Vec<String>,
     pub location: Option<String>,
 }
 
@@ -320,6 +323,23 @@ impl ProviderClient {
         let token = self.credentials.token(credential)?;
         self.api.delete_server(&token, identifier)
     }
+
+    /// Destroys the host whose Hetzner name matches `name`, resolving the
+    /// numeric server identifier the delete endpoint requires (the plan carries
+    /// the node name, not the provider id). A name with no live server is
+    /// already gone and reported as success.
+    pub fn destroy_host_by_name(&self, credential: &CredentialHandle, name: &str) -> Result<()> {
+        let token = self.credentials.token(credential)?;
+        match self
+            .api
+            .list_servers(&token)?
+            .into_iter()
+            .find(|server| server.name.as_str() == name)
+        {
+            Some(server) => self.api.delete_server(&token, &server.identifier),
+            None => Ok(()),
+        }
+    }
 }
 
 impl fmt::Debug for ProviderClient {
@@ -373,7 +393,7 @@ struct ServerPayload {
     name: String,
     server_type: String,
     image: String,
-    ssh_keys: Vec<i64>,
+    ssh_keys: Vec<String>,
     start_after_create: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     location: Option<String>,
@@ -385,7 +405,7 @@ impl ServerPayload {
             name: spec.name.clone(),
             server_type: spec.server_type.clone(),
             image: spec.image.clone(),
-            ssh_keys: spec.ssh_key_ids.clone(),
+            ssh_keys: spec.ssh_keys.clone(),
             start_after_create: true,
             location: spec.location.clone(),
         }
