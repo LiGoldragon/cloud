@@ -559,7 +559,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "meta-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=hetzner-compute#db013c922605d31f30f14d44c9bab78ffb81d7dd"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#f541bc65d1876580f7fc38568a429074cadf795c"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -613,7 +613,7 @@ dependencies = [
 [[package]]
 name = "nota-next"
 version = "0.5.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#7426a6a7d60d6e37ac40df4ecc98717af58129f8"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#7105c2be36067cb3d5b8f744aaf628ffdac7a112"
 dependencies = [
  "nota-next-derive",
  "rkyv",
@@ -622,7 +622,7 @@ dependencies = [
 [[package]]
 name = "nota-next-derive"
 version = "0.3.0"
-source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#7426a6a7d60d6e37ac40df4ecc98717af58129f8"
+source = "git+https://github.com/LiGoldragon/nota-next.git?branch=main#7105c2be36067cb3d5b8f744aaf628ffdac7a112"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -928,6 +928,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#1466d94976c1d7ada1a4179bd56defb096150d6e"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -949,7 +950,7 @@ dependencies = [
 [[package]]
 name = "signal-frame"
 version = "0.2.1"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#e2eae5c28dac47eea6c4c641b60c4fd27bb547d8"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#b0c2c65c3da5117caa01819655de9952c4a0710c"
 dependencies = [
  "paste",
  "rkyv",
@@ -960,7 +961,7 @@ dependencies = [
 [[package]]
 name = "signal-frame-macros"
 version = "0.1.1"
-source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#e2eae5c28dac47eea6c4c641b60c4fd27bb547d8"
+source = "git+https://github.com/LiGoldragon/signal-frame.git?branch=main#b0c2c65c3da5117caa01819655de9952c4a0710c"
 dependencies = [
  "proc-macro2",
  "quote",

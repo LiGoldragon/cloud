@@ -11,7 +11,7 @@ use cloud::hetzner::{
     Api, ApiServer, CredentialSource, Error, ProviderClient, Result, ServerSpec, Token,
 };
 use meta_signal_cloud::{
-    CredentialHandle, Operation as MetaOperation, Registration, Reply as MetaReply,
+    CredentialHandle, HostDestruction, Operation as MetaOperation, Registration, Reply as MetaReply,
 };
 use signal_cloud::{
     CloudHost, DomainName, HostIdentifier, HostQuery, HostStatus, ImageName, IpAddress,
@@ -351,4 +351,112 @@ fn destroy_host_by_name_treats_missing_host_as_already_gone() {
         .expect("missing host is already gone");
 
     assert!(api.deleted().is_empty());
+}
+
+fn approve_and_apply_plan(store: &Store, plan: &meta_signal_cloud::PlanIdentifier) {
+    let approval = MetaOperation::ApprovePlan(meta_signal_cloud::Approval { plan: plan.clone() })
+        .into_request();
+    assert!(matches!(
+        store.handle_meta_request(approval),
+        FrameReply::Accepted { .. }
+    ));
+
+    let application =
+        MetaOperation::ApplyPlan(meta_signal_cloud::Application { plan: plan.clone() })
+            .into_request();
+    match store.handle_meta_request(application) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(MetaReply::PlanApplied(applied)) => assert_eq!(&applied.plan, plan),
+            other => panic!("unexpected apply reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
+    }
+}
+
+fn observe_host_names(store: &Store) -> Vec<String> {
+    let request = CloudOperation::Observe(Observation::Servers(HostQuery {
+        provider: Provider::Hetzner,
+        account: None,
+    }))
+    .into_request();
+    let listing = match store.handle_ordinary_request(request) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(CloudReply::Observed(ObservationResult::Servers(listing))) => listing,
+            other => panic!("unexpected observe reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
+    };
+    listing
+        .hosts
+        .iter()
+        .map(|host| host.name.as_str().to_owned())
+        .collect()
+}
+
+#[test]
+fn full_host_lifecycle_runs_through_the_store_handlers() {
+    // RegisterAccount -> PrepareHostPlan(Create) -> Approve -> Apply ->
+    // Observe(present) -> PrepareHostDestruction -> Approve -> Apply ->
+    // Observe(gone), driven through the real Store handlers with the mock Api.
+    let api = Arc::new(FixtureHetznerApi::new());
+    let store = hetzner_store(api.clone());
+    register_hetzner_account(&store);
+
+    // The fixture is born with one host ("edge-one"); the create plan adds a
+    // second host ("edge-four") to provision and later destroy.
+    assert_eq!(observe_host_names(&store), vec!["edge-one".to_owned()]);
+
+    let preparation = MetaOperation::PrepareHostPlan(meta_signal_cloud::HostPlanPreparation {
+        desired_host_state: meta_signal_cloud::DesiredHostState {
+            provider: Provider::Hetzner,
+            host_name: DomainName::new("edge-four"),
+            server_type: meta_signal_cloud::ServerType::new("cx22"),
+            image_name: meta_signal_cloud::ImageName::new("debian-12"),
+            ssh_key_name: meta_signal_cloud::SshKeyName::new("operator"),
+        },
+    })
+    .into_request();
+    let create_plan = match store.handle_meta_request(preparation) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(MetaReply::HostPlanPrepared(plan)) => plan,
+            other => panic!("unexpected prepare reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
+    };
+    assert_eq!(create_plan.intent, meta_signal_cloud::HostIntent::Create);
+
+    approve_and_apply_plan(&store, &create_plan.identifier);
+
+    // The applied Create plan provisioned "edge-four" alongside the fixture host.
+    assert_eq!(
+        observe_host_names(&store),
+        vec!["edge-one".to_owned(), "edge-four".to_owned()]
+    );
+
+    // PrepareHostDestruction mints a Destroy plan reusing HostPlanPrepared.
+    let destruction = MetaOperation::PrepareHostDestruction(HostDestruction {
+        provider: Provider::Hetzner,
+        host_name: DomainName::new("edge-four"),
+    })
+    .into_request();
+    let destroy_plan = match store.handle_meta_request(destruction) {
+        FrameReply::Accepted { per_operation, .. } => match per_operation.into_head_and_tail().0 {
+            SubReply::Ok(MetaReply::HostPlanPrepared(plan)) => plan,
+            other => panic!("unexpected destruction reply {other:?}"),
+        },
+        other => panic!("unexpected frame reply {other:?}"),
+    };
+    assert_eq!(destroy_plan.intent, meta_signal_cloud::HostIntent::Destroy);
+    assert_eq!(destroy_plan.host_name, DomainName::new("edge-four"));
+    // The create-only fields are minted empty on a Destroy plan.
+    assert_eq!(destroy_plan.server_type.as_str(), "");
+    assert_eq!(destroy_plan.image_name.as_str(), "");
+    assert_eq!(destroy_plan.ssh_key_name.as_str(), "");
+
+    approve_and_apply_plan(&store, &destroy_plan.identifier);
+
+    // The Destroy plan resolved "edge-four" to its Hetzner id before deleting it;
+    // only the fixture host remains.
+    assert_eq!(observe_host_names(&store), vec!["edge-one".to_owned()]);
+    assert_eq!(api.deleted(), vec!["5012".to_owned()]);
 }

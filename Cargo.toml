@@ -32,7 +32,7 @@ nota-text = ["signal-cloud/nota-text", "meta-signal-cloud/nota-text"]
 
 [dependencies]
 nota-next         = { git = "https://github.com/LiGoldragon/nota-next.git", branch = "main" }
-meta-signal-cloud = { git = "https://github.com/LiGoldragon/meta-signal-cloud.git", branch = "hetzner-compute", features = ["nota-text"] }
+meta-signal-cloud = { git = "https://github.com/LiGoldragon/meta-signal-cloud.git", branch = "main", features = ["nota-text"] }
 rkyv              = { version = "0.8", default-features = false, features = ["std", "bytecheck", "little_endian", "pointer_width_32", "unaligned"] }
 signal-cloud        = { git = "https://github.com/LiGoldragon/signal-cloud.git", branch = "main", features = ["nota-text"] }
 signal-domain-criome = { git = "https://github.com/LiGoldragon/signal-domain-criome.git", branch = "main" }
@@ -46,17 +46,6 @@ ureq              = { version = "2", features = ["json"], optional = true }
 
 [build-dependencies]
 schema-rust-next = { git = "https://github.com/LiGoldragon/schema-rust-next.git", branch = "main" }
-
-# Dev-loop aid: the Hetzner Phase 1 wire vocabulary lives on the
-# `hetzner-compute` branch of signal-cloud, but the pushed
-# meta-signal-cloud@hetzner-compute still references signal-cloud via
-# `branch = "main"`. The shared `links = "signal-cloud"` marker forbids two
-# signal-cloud sources in one graph, so redirect every signal-cloud reference
-# (cloud's and meta-signal-cloud's) to the single hetzner-compute worktree.
-# INTEGRATION MUST REPLACE THIS with branch pins once signal-cloud and
-# meta-signal-cloud land on main and meta-signal-cloud repins signal-cloud.
-[patch."https://github.com/LiGoldragon/signal-cloud.git"]
-signal-cloud = { path = "/home/li/wt/github.com/LiGoldragon/signal-cloud/hetzner-compute" }
 
 [dev-dependencies]
 tempfile = "3"

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use meta_signal_cloud::{
-    AccountRegistered, AccountRetired, Application, Approval, CredentialRotated,
+    AccountRegistered, AccountRetired, Application, Approval, CredentialRotated, HostDestruction,
     HostPlanPreparation, Operation as MetaOperation, PlanApproved, PlanPreparation, PolicySet,
     ProjectionPreparation, Registration, Reply as MetaReply,
     RequestRejected as MetaRequestRejected, Retirement, Rotation,
@@ -1214,6 +1214,50 @@ impl Store {
         MetaReply::HostPlanPrepared(plan)
     }
 
+    fn prepare_host_destruction(&self, destruction: HostDestruction) -> MetaReply {
+        let HostDestruction {
+            provider,
+            host_name,
+        } = destruction;
+        if !Self::provider_is_built(provider) {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        }
+        if !self.provider_is_configured(provider) {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        }
+        if !Self::provider_supports_capability(provider, Capability::CloudHosts) {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::CapabilityUnauthorized,
+            });
+        }
+        // A Destroy plan resolves the host by name at apply time, so the
+        // create-only fields (server_type / image_name / ssh_key_name) carry no
+        // meaning and are minted empty. The apply path routes intent=Destroy to
+        // destroy_host_by_name, which never reads them.
+        let plan = meta_signal_cloud::HostPlan {
+            identifier: PlanIdentifier::new(format!(
+                "{}-{:?}-host-destruction-plan",
+                host_name.as_str(),
+                provider
+            )),
+            provider,
+            host_name,
+            server_type: meta_signal_cloud::ServerType::new(""),
+            image_name: meta_signal_cloud::ImageName::new(""),
+            ssh_key_name: meta_signal_cloud::SshKeyName::new(""),
+            intent: meta_signal_cloud::HostIntent::Destroy,
+        };
+        self.host_plans
+            .lock()
+            .expect("host plans mutex")
+            .push(plan.clone());
+        MetaReply::HostPlanPrepared(plan)
+    }
+
     fn record_plan_for(
         &self,
         provider: Provider,
@@ -1259,6 +1303,9 @@ impl Store {
             MetaOperation::SetPolicy(policy) => self.set_policy(policy),
             MetaOperation::PreparePlan(preparation) => self.prepare_plan(preparation),
             MetaOperation::PrepareHostPlan(preparation) => self.prepare_host_plan(preparation),
+            MetaOperation::PrepareHostDestruction(destruction) => {
+                self.prepare_host_destruction(destruction)
+            }
             MetaOperation::PrepareProjection(preparation) => self.prepare_projection(preparation),
             MetaOperation::ApprovePlan(approval) => self.approve_plan(approval),
             MetaOperation::ApplyPlan(application) => self.apply_plan(application),

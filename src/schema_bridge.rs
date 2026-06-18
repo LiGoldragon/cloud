@@ -129,6 +129,11 @@ impl SchemaMetaInput {
                         .into_payload(),
                 )
             }
+            meta_signal_cloud::Operation::PrepareHostDestruction(destruction) => {
+                meta::Input::prepare_host_destruction(
+                    LegacyHostDestruction::new(destruction).into_schema(),
+                )
+            }
             meta_signal_cloud::Operation::PrepareProjection(preparation) => {
                 meta::Input::prepare_projection(
                     LegacyProjectionPreparation::new(preparation).into_schema(),
@@ -172,6 +177,11 @@ impl SchemaMetaInput {
             meta::Input::PrepareHostPlan(preparation) => {
                 meta_signal_cloud::Operation::PrepareHostPlan(
                     SchemaHostPlanPreparation::new(preparation).into_legacy(),
+                )
+            }
+            meta::Input::PrepareHostDestruction(destruction) => {
+                meta_signal_cloud::Operation::PrepareHostDestruction(
+                    SchemaHostDestruction::new(destruction).into_legacy(),
                 )
             }
             meta::Input::PrepareProjection(preparation) => {
@@ -3010,6 +3020,40 @@ impl SchemaMetaDesiredHostState {
             ssh_key_name: meta_signal_cloud::SshKeyName::new(
                 self.desired.ssh_key_name.into_payload(),
             ),
+        }
+    }
+}
+
+struct LegacyHostDestruction {
+    destruction: meta_signal_cloud::HostDestruction,
+}
+
+impl LegacyHostDestruction {
+    pub fn new(destruction: meta_signal_cloud::HostDestruction) -> Self {
+        Self { destruction }
+    }
+
+    pub fn into_schema(self) -> meta::HostDestruction {
+        meta::HostDestruction {
+            provider: LegacyProvider::new(self.destruction.provider).into_meta_schema(),
+            host_name: meta::DomainName::new(self.destruction.host_name.as_str().to_owned()),
+        }
+    }
+}
+
+struct SchemaHostDestruction {
+    destruction: meta::HostDestruction,
+}
+
+impl SchemaHostDestruction {
+    pub fn new(destruction: meta::HostDestruction) -> Self {
+        Self { destruction }
+    }
+
+    pub fn into_legacy(self) -> meta_signal_cloud::HostDestruction {
+        meta_signal_cloud::HostDestruction {
+            provider: MetaSchemaProvider::new(self.destruction.provider).into_legacy(),
+            host_name: signal_cloud::DomainName::new(self.destruction.host_name.into_payload()),
         }
     }
 }

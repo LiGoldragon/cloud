@@ -13,6 +13,38 @@ Spirit records; not embellished.*
 - The cloud runtime owns provider execution: policy state, plan state,
   credential-handle resolution, provider effects, and future SEMA persistence.
 
+## On-demand compute provisioning
+
+- The cloud component's active capability is on-demand compute-node
+  provisioning, Hetzner first. The lifecycle is create / observe / destroy: an
+  ordinary socket observes the live hosts a provider account holds, and a
+  meta-policy (owner-approved) socket prepares, approves, and applies host plans
+  that create or destroy nodes.
+- Host creation and destruction are owner-approved meta operations.
+  `PrepareHostPlan` mints a `Create` host plan; `PrepareHostDestruction`
+  (`HostDestruction { provider, host_name }`) mints a `Destroy` host plan that
+  reuses the `HostPlanPrepared` reply. Both require explicit approval before the
+  apply step routes a `Create` plan to provider creation and a `Destroy` plan to
+  destroy-by-name (the host is resolved to its provider identifier at apply
+  time, so a destroy plan's create-only fields carry no meaning and are minted
+  empty).
+- The Hetzner adapter resolves its API token fresh from the `HCLOUD_TOKEN`
+  credential handle (gopass `hetzner/api-token`); the token is never echoed and
+  crosses meta policy only by handle, never as secret bytes.
+
+## Billing-hour reuse pool (Spirit `6ks1`)
+
+- Cloud providers bill by the hour, so a node should not be torn down and
+  re-created within a paid hour it has already been charged for. Each provider
+  carries a `keep_warm_duration` (Hetzner: 59 minutes) anchored to the node's
+  `created_at`: an idle node still inside its paid window is kept warm and
+  reused for the next workload rather than destroyed, and is reaped only just
+  before the next paid hour would begin.
+- The principle is reuse-before-reap, but the larger win is latency: a warm,
+  already-provisioned node answers far faster than a cold create. The reuse pool
+  and its reaper ride the deferred-effect / actor seam and are a staged follow-up
+  to Phase 1, not yet built.
+
 ## Constraints
 
 - Signal contract repositories carry only Signal wire vocabulary. Runtime
