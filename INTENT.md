@@ -16,10 +16,12 @@ Spirit records; not embellished.*
 ## On-demand compute provisioning
 
 - The cloud component's active capability is on-demand compute-node
-  provisioning, Hetzner first. The lifecycle is create / observe / destroy: an
-  ordinary socket observes the live hosts a provider account holds, and a
-  meta-policy (owner-approved) socket prepares, approves, and applies host plans
-  that create or destroy nodes.
+  provisioning. [DigitalOcean is the lead compute provider for cloud,
+  superseding the earlier Hetzner-lead position] (Spirit `hcp8`); Hetzner
+  remains a built and supported compute provider but is no longer the lead. The
+  lifecycle is create / observe / destroy: an ordinary socket observes the live
+  hosts a provider account holds, and a meta-policy (owner-approved) socket
+  prepares, approves, and applies host plans that create or destroy nodes.
 - Host creation and destruction are owner-approved meta operations.
   `PrepareHostPlan` mints a `Create` host plan; `PrepareHostDestruction`
   (`HostDestruction { provider, host_name }`) mints a `Destroy` host plan that
@@ -28,22 +30,43 @@ Spirit records; not embellished.*
   destroy-by-name (the host is resolved to its provider identifier at apply
   time, so a destroy plan's create-only fields carry no meaning and are minted
   empty).
-- The Hetzner adapter resolves its API token fresh from the `HCLOUD_TOKEN`
-  credential handle (gopass `hetzner/api-token`); the token is never echoed and
-  crosses meta policy only by handle, never as secret bytes.
+- Each provider adapter resolves its API token fresh from a credential handle
+  the daemon reads from its environment — DigitalOcean from
+  `DIGITALOCEAN_ACCESS_TOKEN` (gopass `digitalocean.com/api-token`), Hetzner from
+  `HCLOUD_TOKEN` (gopass `hetzner/api-token`), Cloudflare from `CF_API_TOKEN`
+  (gopass `cloudflare.com/token`). The token is never echoed and crosses meta
+  policy only by handle, never as secret bytes. The handle-names-an-environment-
+  variable model is the accepted transitional shape; [the eventual direction is
+  system-custodied machine credentials, not a wire-selected environment variable
+  name] (Spirit `iprx`).
 
 ## Billing-hour reuse pool (Spirit `6ks1`)
 
-- Cloud providers bill by the hour, so a node should not be torn down and
-  re-created within a paid hour it has already been charged for. Each provider
-  carries a `keep_warm_duration` (Hetzner: 59 minutes) anchored to the node's
-  `created_at`: an idle node still inside its paid window is kept warm and
-  reused for the next workload rather than destroyed, and is reaped only just
-  before the next paid hour would begin.
+- Hourly-billed providers (Hetzner) charge a full hour up front, so a node
+  should not be torn down and re-created within a paid hour it has already been
+  charged for. Each such provider carries a `keep_warm_duration` (Hetzner: 59
+  minutes) anchored to the node's `created_at`: an idle node still inside its
+  paid window is kept warm and reused for the next workload rather than
+  destroyed, and is reaped only just before the next paid hour would begin.
+  DigitalOcean bills by the second or minute, so the reuse pool is unnecessary
+  for it (Spirit `hcp8`) — a DigitalOcean node can be deleted immediately after
+  use.
 - The principle is reuse-before-reap, but the larger win is latency: a warm,
   already-provisioned node answers far faster than a cold create. The reuse pool
   and its reaper ride the deferred-effect / actor seam and are a staged follow-up
   to Phase 1, not yet built.
+
+## Cloud-node OS images (Spirit `ad53`)
+
+- [Cloud-node OS images live in CriomOS as a minimal CloudNode-species profile
+  built to provider snapshots so nodes boot fast. The cloud daemon references
+  the image by id through the existing HostPlan `image_name` field and never
+  holds the image definition. CriomOS owns the image definition and
+  provider-format build, while cloud owns snapshot-id selection and
+  provisioning.] (Spirit `ad53`).
+- `image_name` is already plumbed end to end (wire `HostPlan` → adapter
+  `ServerSpec.image`); the unbuilt part is the platform half — a CriomOS
+  `CloudNode` species profile and its provider-snapshot build.
 
 ## Constraints
 
