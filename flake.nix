@@ -68,9 +68,22 @@
               --run 'HCLOUD_TOKEN=$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token) || { echo "cloud: cannot fetch HCLOUD_TOKEN from gopass hetzner/api-token" >&2; exit 78; }; export HCLOUD_TOKEN'
           '';
         };
+        # DigitalOcean Phase 1 reads the REST API in-process, like Hetzner. The
+        # shim injects DIGITALOCEAN_ACCESS_TOKEN from gopass and keeps the doctl
+        # CLI on PATH for operator debugging.
+        digitaloceanCli = pkgs.symlinkJoin {
+          name = "doctl-gopass-wrapped";
+          paths = [ pkgs.doctl ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/doctl \
+              --run 'DIGITALOCEAN_ACCESS_TOKEN=$(${pkgs.gopass}/bin/gopass show -o digitalocean/api-token) || { echo "cloud: cannot fetch DIGITALOCEAN_ACCESS_TOKEN from gopass digitalocean/api-token" >&2; exit 78; }; export DIGITALOCEAN_ACCESS_TOKEN'
+          '';
+        };
         cloudRuntimePath = pkgs.lib.makeBinPath [
           cloudflareCli
           hetznerCli
+          digitaloceanCli
         ];
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
       in
@@ -83,7 +96,8 @@
             meta.mainProgram = "cloud";
             postInstall = ''
               wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath} \
-                --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}'
+                --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}' \
+                --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean/api-token 2>/dev/null)}'
             '';
           }
         );
@@ -136,6 +150,7 @@
           packages = [
             cloudflareCli
             hetznerCli
+            digitaloceanCli
             pkgs.jujutsu
             toolchain
           ];

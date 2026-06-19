@@ -43,6 +43,7 @@ impl ProviderProjection {
             meta_signal_cloud::schema::lib::Provider::Cloudflare => Provider::Cloudflare,
             meta_signal_cloud::schema::lib::Provider::GoogleCloud => Provider::GoogleCloud,
             meta_signal_cloud::schema::lib::Provider::Hetzner => Provider::Hetzner,
+            meta_signal_cloud::schema::lib::Provider::DigitalOcean => Provider::DigitalOcean,
         }
     }
 }

@@ -319,6 +319,7 @@ impl SchemaProvider {
             ordinary::Provider::Cloudflare => signal_cloud::Provider::Cloudflare,
             ordinary::Provider::GoogleCloud => signal_cloud::Provider::GoogleCloud,
             ordinary::Provider::Hetzner => signal_cloud::Provider::Hetzner,
+            ordinary::Provider::DigitalOcean => signal_cloud::Provider::DigitalOcean,
         }
     }
 }
@@ -337,6 +338,7 @@ impl LegacyProvider {
             signal_cloud::Provider::Cloudflare => ordinary::Provider::Cloudflare,
             signal_cloud::Provider::GoogleCloud => ordinary::Provider::GoogleCloud,
             signal_cloud::Provider::Hetzner => ordinary::Provider::Hetzner,
+            signal_cloud::Provider::DigitalOcean => ordinary::Provider::DigitalOcean,
         }
     }
 
@@ -345,6 +347,7 @@ impl LegacyProvider {
             signal_cloud::Provider::Cloudflare => meta::Provider::Cloudflare,
             signal_cloud::Provider::GoogleCloud => meta::Provider::GoogleCloud,
             signal_cloud::Provider::Hetzner => meta::Provider::Hetzner,
+            signal_cloud::Provider::DigitalOcean => meta::Provider::DigitalOcean,
         }
     }
 }
@@ -363,6 +366,7 @@ impl MetaSchemaProvider {
             meta::Provider::Cloudflare => signal_cloud::Provider::Cloudflare,
             meta::Provider::GoogleCloud => signal_cloud::Provider::GoogleCloud,
             meta::Provider::Hetzner => signal_cloud::Provider::Hetzner,
+            meta::Provider::DigitalOcean => signal_cloud::Provider::DigitalOcean,
         }
     }
 }

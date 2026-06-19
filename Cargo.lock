@@ -559,7 +559,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "meta-signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#f541bc65d1876580f7fc38568a429074cadf795c"
+source = "git+https://github.com/LiGoldragon/meta-signal-cloud.git?branch=main#54d62be8f68418082141daa1aef374382bb50a18"
 dependencies = [
  "nota-next",
  "rkyv",
@@ -928,7 +928,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "signal-cloud"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#1466d94976c1d7ada1a4179bd56defb096150d6e"
+source = "git+https://github.com/LiGoldragon/signal-cloud.git?branch=main#4e846bc0cb1b95cd5f0049fa0698e1b57594d80d"
 dependencies = [
  "nota-next",
  "rkyv",

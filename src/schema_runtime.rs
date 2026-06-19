@@ -123,6 +123,11 @@ impl SchemaRuntime {
                 capability: ordinary::Capability::DomainNameSystemRecords,
                 capability_state: ordinary::CapabilityState::NotBuilt,
             },
+            ordinary::CapabilityObservation {
+                provider: ordinary::Provider::DigitalOcean,
+                capability: ordinary::Capability::CloudHosts,
+                capability_state: ordinary::CapabilityState::NotBuilt,
+            },
         ]
     }
 

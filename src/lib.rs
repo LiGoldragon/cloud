@@ -33,6 +33,8 @@ pub mod cloudflare;
 #[cfg(feature = "cloudflare")]
 pub mod cloudflare_cli;
 pub mod daemon_command;
+#[cfg(feature = "digitalocean")]
+pub mod digitalocean;
 #[cfg(feature = "hetzner")]
 pub mod hetzner;
 pub mod schema;
@@ -124,6 +126,10 @@ pub enum Error {
     #[cfg(feature = "hetzner")]
     #[error("Hetzner provider error: {0}")]
     Hetzner(#[from] hetzner::Error),
+
+    #[cfg(feature = "digitalocean")]
+    #[error("DigitalOcean provider error: {0}")]
+    DigitalOcean(#[from] digitalocean::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -539,6 +545,8 @@ pub struct Store {
     cloudflare: cloudflare::ProviderClient,
     #[cfg(feature = "hetzner")]
     hetzner: hetzner::ProviderClient,
+    #[cfg(feature = "digitalocean")]
+    digitalocean: digitalocean::ProviderClient,
 }
 
 impl Default for Store {
@@ -553,6 +561,8 @@ impl Store {
         let cloudflare = cloudflare::ProviderClient::production();
         #[cfg(feature = "hetzner")]
         let hetzner = hetzner::ProviderClient::production();
+        #[cfg(feature = "digitalocean")]
+        let digitalocean = digitalocean::ProviderClient::production();
         Self::with_parts(
             Vec::new(),
             meta_signal_cloud::Policy {
@@ -563,6 +573,8 @@ impl Store {
             cloudflare,
             #[cfg(feature = "hetzner")]
             hetzner,
+            #[cfg(feature = "digitalocean")]
+            digitalocean,
         )
     }
 
@@ -577,6 +589,8 @@ impl Store {
             cloudflare,
             #[cfg(feature = "hetzner")]
             hetzner::ProviderClient::production(),
+            #[cfg(feature = "digitalocean")]
+            digitalocean::ProviderClient::production(),
         )
     }
 
@@ -591,6 +605,24 @@ impl Store {
             #[cfg(feature = "cloudflare")]
             cloudflare::ProviderClient::production(),
             hetzner,
+            #[cfg(feature = "digitalocean")]
+            digitalocean::ProviderClient::production(),
+        )
+    }
+
+    #[cfg(feature = "digitalocean")]
+    pub fn with_digitalocean_provider(digitalocean: digitalocean::ProviderClient) -> Self {
+        Self::with_parts(
+            Vec::new(),
+            meta_signal_cloud::Policy {
+                zones: Vec::new(),
+                capabilities: Vec::new(),
+            },
+            #[cfg(feature = "cloudflare")]
+            cloudflare::ProviderClient::production(),
+            #[cfg(feature = "hetzner")]
+            hetzner::ProviderClient::production(),
+            digitalocean,
         )
     }
 
@@ -599,6 +631,7 @@ impl Store {
         policy: meta_signal_cloud::Policy,
         #[cfg(feature = "cloudflare")] cloudflare: cloudflare::ProviderClient,
         #[cfg(feature = "hetzner")] hetzner: hetzner::ProviderClient,
+        #[cfg(feature = "digitalocean")] digitalocean: digitalocean::ProviderClient,
     ) -> Self {
         Self {
             accounts: Mutex::new(accounts),
@@ -612,6 +645,8 @@ impl Store {
             cloudflare,
             #[cfg(feature = "hetzner")]
             hetzner,
+            #[cfg(feature = "digitalocean")]
+            digitalocean,
         }
     }
 
@@ -717,6 +752,7 @@ impl Store {
             (Provider::Hetzner, Capability::Networks),
             (Provider::Hetzner, Capability::Firewalls),
             (Provider::Hetzner, Capability::LoadBalancers),
+            (Provider::DigitalOcean, Capability::CloudHosts),
         ]
         .into_iter()
         .filter(|(provider, capability)| {
@@ -812,6 +848,10 @@ impl Store {
         if query.provider == Provider::Hetzner {
             return self.observe_hetzner_hosts(query.account);
         }
+        #[cfg(feature = "digitalocean")]
+        if query.provider == Provider::DigitalOcean {
+            return self.observe_digitalocean_hosts(query.account);
+        }
         CloudReply::Observed(ObservationResult::Servers(CloudHostListing {
             hosts: vec![],
         }))
@@ -847,6 +887,42 @@ impl Store {
         for binding in bindings {
             hosts.extend(
                 self.hetzner
+                    .observe_hosts(&binding.credential, &binding.account)?,
+            );
+        }
+        Ok(CloudHostListing { hosts })
+    }
+
+    #[cfg(feature = "digitalocean")]
+    fn observe_digitalocean_hosts(
+        &self,
+        account: Option<meta_signal_cloud::ProviderAccount>,
+    ) -> CloudReply {
+        match self.digitalocean_host_listing(account) {
+            Ok(listing) => CloudReply::Observed(ObservationResult::Servers(listing)),
+            Err(digitalocean::Error::CredentialUnavailable(_)) => {
+                CloudReply::RequestUnsupported(RequestUnsupported {
+                    provider: Some(Provider::DigitalOcean),
+                    capability: Some(Capability::CloudHosts),
+                    reason: UnsupportedReason::ProviderNotConfigured,
+                })
+            }
+            Err(_) => CloudReply::RequestRejected(RequestRejected {
+                reason: signal_cloud::RejectionReason::ProviderUnavailable,
+            }),
+        }
+    }
+
+    #[cfg(feature = "digitalocean")]
+    fn digitalocean_host_listing(
+        &self,
+        account: Option<meta_signal_cloud::ProviderAccount>,
+    ) -> digitalocean::Result<CloudHostListing> {
+        let bindings = self.account_bindings(Provider::DigitalOcean, account);
+        let mut hosts = Vec::new();
+        for binding in bindings {
+            hosts.extend(
+                self.digitalocean
                     .observe_hosts(&binding.credential, &binding.account)?,
             );
         }
@@ -992,7 +1068,7 @@ impl Store {
             .ok_or_else(|| cloudflare::Error::ZoneNotFound(zone.as_str().to_owned()))
     }
 
-    #[cfg(any(feature = "cloudflare", feature = "hetzner"))]
+    #[cfg(any(feature = "cloudflare", feature = "hetzner", feature = "digitalocean"))]
     fn account_bindings(
         &self,
         provider: Provider,
@@ -1484,7 +1560,18 @@ impl Store {
                 reason: meta_signal_cloud::RejectionReason::PlanNotApproved,
             });
         }
-        self.apply_hetzner_host_plan(plan)
+        // Route the approved host plan onto the provider it names. Each provider
+        // arm is compiled only when its feature is built; an unbuilt provider
+        // falls through to the rejection below.
+        match plan.provider {
+            #[cfg(feature = "hetzner")]
+            Provider::Hetzner => self.apply_hetzner_host_plan(plan),
+            #[cfg(feature = "digitalocean")]
+            Provider::DigitalOcean => self.apply_digitalocean_host_plan(plan),
+            _ => MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            }),
+        }
     }
 
     #[cfg(feature = "hetzner")]
@@ -1530,13 +1617,6 @@ impl Store {
         }
     }
 
-    #[cfg(not(feature = "hetzner"))]
-    fn apply_hetzner_host_plan(&self, _plan: meta_signal_cloud::HostPlan) -> MetaReply {
-        MetaReply::RequestRejected(MetaRequestRejected {
-            reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
-        })
-    }
-
     #[cfg(feature = "hetzner")]
     fn meta_reply_for_hetzner_error(error: hetzner::Error) -> MetaReply {
         let reason = match error {
@@ -1547,6 +1627,65 @@ impl Store {
                 meta_signal_cloud::RejectionReason::ProviderNotConfigured
             }
             hetzner::Error::RequestFailed(_) | hetzner::Error::RequestRejected(_) => {
+                meta_signal_cloud::RejectionReason::PlanGenerationFailed
+            }
+        };
+        MetaReply::RequestRejected(MetaRequestRejected { reason })
+    }
+
+    #[cfg(feature = "digitalocean")]
+    fn apply_digitalocean_host_plan(&self, plan: meta_signal_cloud::HostPlan) -> MetaReply {
+        if plan.provider != Provider::DigitalOcean {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        }
+        let Some(binding) = self
+            .account_bindings(Provider::DigitalOcean, None)
+            .into_iter()
+            .next()
+        else {
+            return MetaReply::RequestRejected(MetaRequestRejected {
+                reason: meta_signal_cloud::RejectionReason::ProviderNotConfigured,
+            });
+        };
+        let outcome = match plan.intent {
+            meta_signal_cloud::HostIntent::Create => self
+                .digitalocean
+                .create_host(
+                    &binding.credential,
+                    &binding.account,
+                    &digitalocean::ServerSpec {
+                        name: plan.host_name.as_str().to_owned(),
+                        server_type: plan.server_type.as_str().to_owned(),
+                        image: plan.image_name.as_str().to_owned(),
+                        ssh_keys: vec![plan.ssh_key_name.as_str().to_owned()],
+                        location: None,
+                    },
+                )
+                .map(|_| ()),
+            meta_signal_cloud::HostIntent::Destroy => self
+                .digitalocean
+                .destroy_host_by_name(&binding.credential, plan.host_name.as_str()),
+        };
+        match outcome {
+            Ok(()) => MetaReply::PlanApplied(meta_signal_cloud::PlanApplied {
+                plan: plan.identifier,
+            }),
+            Err(error) => Self::meta_reply_for_digitalocean_error(error),
+        }
+    }
+
+    #[cfg(feature = "digitalocean")]
+    fn meta_reply_for_digitalocean_error(error: digitalocean::Error) -> MetaReply {
+        let reason = match error {
+            digitalocean::Error::CredentialUnavailable(_) => {
+                meta_signal_cloud::RejectionReason::CredentialHandleUnknown
+            }
+            digitalocean::Error::HostNotFound(_) => {
+                meta_signal_cloud::RejectionReason::ProviderNotConfigured
+            }
+            digitalocean::Error::RequestFailed(_) | digitalocean::Error::RequestRejected(_) => {
                 meta_signal_cloud::RejectionReason::PlanGenerationFailed
             }
         };
@@ -1615,6 +1754,7 @@ impl Store {
             Provider::Cloudflare => cfg!(feature = "cloudflare"),
             Provider::GoogleCloud => cfg!(feature = "google-cloud"),
             Provider::Hetzner => cfg!(feature = "hetzner"),
+            Provider::DigitalOcean => cfg!(feature = "digitalocean"),
         }
     }
 
@@ -1627,6 +1767,7 @@ impl Store {
                 | (Provider::Hetzner, Capability::Networks)
                 | (Provider::Hetzner, Capability::Firewalls)
                 | (Provider::Hetzner, Capability::LoadBalancers)
+                | (Provider::DigitalOcean, Capability::CloudHosts)
         )
     }
 

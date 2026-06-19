@@ -26,6 +26,7 @@ path = "src/bin/meta-cloud.rs"
 [features]
 default = ["cloudflare"]
 cloudflare = ["dep:serde", "dep:serde_json", "dep:ureq"]
+digitalocean = ["dep:serde", "dep:serde_json", "dep:ureq"]
 google-cloud = []
 hetzner = ["dep:serde", "dep:serde_json", "dep:ureq"]
 nota-text = ["signal-cloud/nota-text", "meta-signal-cloud/nota-text"]
