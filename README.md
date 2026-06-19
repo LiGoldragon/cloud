@@ -12,7 +12,7 @@ diff-aware DNS plan preparation, and a Cloudflare provider path for DNS zones
 and records. The production default uses `flarectl --json` under the
 daemon-owned provider client for Cloudflare DNS read and meta-approved DNS
 record application. The packaged `flarectl` wrapper loads `CF_API_TOKEN` from
-`gopass show -o cloudflare/api-token` and fails loudly if that handle is
+`gopass show -o cloudflare.com/token` and fails loudly if that handle is
 missing.
 
 `cloud` can now also prepare provider plans from `domain-criome` projections:

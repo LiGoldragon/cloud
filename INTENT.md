@@ -33,8 +33,10 @@ Spirit records; not embellished.*
 - Each provider adapter resolves its API token fresh from a credential handle
   the daemon reads from its environment — DigitalOcean from
   `DIGITALOCEAN_ACCESS_TOKEN` (gopass `digitalocean.com/api-token`), Hetzner from
-  `HCLOUD_TOKEN` (gopass `hetzner/api-token`), Cloudflare from `CF_API_TOKEN`
-  (gopass `cloudflare.com/token`). The token is never echoed and crosses meta
+  `HCLOUD_TOKEN` (gopass `hetzner/api-token`), Cloudflare from
+  `CLOUDFLARE_DNS_TOKEN` (gopass `cloudflare.com/token`; the resolved token is
+  passed to the bundled `flarectl` subprocess as `CF_API_TOKEN`). The token is
+  never echoed and crosses meta
   policy only by handle, never as secret bytes. The handle-names-an-environment-
   variable model is the accepted transitional shape; [the eventual direction is
   system-custodied machine credentials, not a wire-selected environment variable
