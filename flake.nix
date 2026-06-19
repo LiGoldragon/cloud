@@ -68,7 +68,7 @@
           nativeBuildInputs = [ pkgs.makeWrapper ];
           postBuild = ''
             wrapProgram $out/bin/doctl \
-              --run 'DIGITALOCEAN_ACCESS_TOKEN=$(${pkgs.gopass}/bin/gopass show -o digitalocean/api-token) || { echo "cloud: cannot fetch DIGITALOCEAN_ACCESS_TOKEN from gopass digitalocean/api-token" >&2; exit 78; }; export DIGITALOCEAN_ACCESS_TOKEN'
+              --run 'DIGITALOCEAN_ACCESS_TOKEN=$(${pkgs.gopass}/bin/gopass show -o digitalocean.com/api-token) || { echo "cloud: cannot fetch DIGITALOCEAN_ACCESS_TOKEN from gopass digitalocean.com/api-token" >&2; exit 78; }; export DIGITALOCEAN_ACCESS_TOKEN'
           '';
         };
         cloudRuntimePath = pkgs.lib.makeBinPath [
@@ -88,7 +88,7 @@
             postInstall = ''
               wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath} \
                 --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}' \
-                --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean/api-token 2>/dev/null)}'
+                --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean.com/api-token 2>/dev/null)}'
             '';
           }
         );
