@@ -29,7 +29,26 @@ plans from authorized inputs.
 
 ## Actor Shape
 
-The first daemon should use one actor per concern:
+**Shipped today.** The live daemon is the emitted `ActorMultiListenerDaemon`
+(`src/schema/daemon.rs`) binding the ordinary and meta sockets, with a
+**single engine actor** whose runtime is `Arc<Store>` (`src/schema_daemon.rs`,
+`impl ComponentDaemon for CloudDaemon`). Both sockets funnel every request
+through that one actor mailbox; account/credential/zone policy, plan, and
+last-known-read state all live behind the one `Store`. There are not yet
+separate per-concern provider actors. See §"Schema-engine upgrade track" for
+the emitted-spine detail and `reports/cloud-designer/70` for the live Tier-2
+witness over the real sockets.
+
+**Known divergence (tracked).** Provider IO (`ureq` for Hetzner/DigitalOcean,
+`flarectl` for Cloudflare) currently runs **synchronously inside the async
+engine handler** with no `spawn_blocking` and no per-call timeout, so one slow
+or hung provider call serializes both sockets — the daemon is an elaborate
+single-writer. This contradicts the no-block target below and is the top
+structural follow-up (`skills/actor-systems.md` §"Blocking is a design bug";
+`reports/cloud-designer/68` finding #2; bead `primary-x8by`).
+
+**Target decomposition (aspirational, not shipped).** Move provider work off
+the engine handler onto a bounded blocking plane and split by concern:
 
 - `CloudflareProvider` for Cloudflare HTTP API calls;
 - `PlanStore` for prepared plans and approval state;
@@ -38,7 +57,9 @@ The first daemon should use one actor per concern:
 - `RemoteOperationTracker` for asynchronous provider operations.
 
 Provider calls must not block the ordinary listener, meta listener, or plan
-store. Slow provider work belongs behind provider actors with timeouts.
+store. Slow provider work belongs behind a bounded blocking plane
+(`spawn_blocking` + permit pool + per-call timeout + `DelegatedReply`) or
+provider actors with timeouts — the path the divergence above must close.
 
 ## Current Implementation Slice
 
@@ -136,7 +157,11 @@ Signal replies. The two schema-emitted SEMA tables back the state —
 `AccountPolicyTable` keyed by provider + account, and `PlanTable` as the 1:N
 keyed collection of `StoredPlan` keyed by plan identifier. That slice is still
 valuable as the schema/Nexus/SEMA pilot, but it is not the live provider-effect
-path yet.
+path yet: `build_runtime` builds the `Arc<Store>` the live engine actor uses,
+not `SchemaStore`, so `schema_runtime.rs` is unreachable from the daemon path.
+Whether to **promote** the pilot onto the live path or **cut** it pending the
+sema-engine persistence slice is an open decision (bead `primary-x8by`); until
+then this section describes a pilot, not the running engine.
 
 The live daemon spine is **emitted** into `src/schema/daemon.rs` by the
 schema-rust-next daemon emitter (triad_main): the `DaemonCommand` argv-to-config

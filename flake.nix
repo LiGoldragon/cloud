@@ -95,7 +95,8 @@
               postInstall = ''
                 wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath} \
                   --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}' \
-                  --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean.com/api-token 2>/dev/null)}'
+                  --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean.com/api-token 2>/dev/null)}' \
+                  --run 'export CLOUDFLARE_DNS_TOKEN=''${CLOUDFLARE_DNS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o cloudflare.com/token 2>/dev/null)}'
               '';
             }
           );
