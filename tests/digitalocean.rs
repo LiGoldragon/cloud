@@ -71,6 +71,10 @@ impl Api for FixtureDigitalOceanApi {
         Ok("aa:bb:cc:dd".to_owned())
     }
 
+    fn delete_ssh_key(&self, _token: &Token, _fingerprint: &str) -> Result<()> {
+        Ok(())
+    }
+
     fn create_server(&self, _token: &Token, spec: &ServerSpec) -> Result<ApiServer> {
         self.created.lock().expect("created").push(spec.clone());
         let created = ApiServer {

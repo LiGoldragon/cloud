@@ -77,21 +77,57 @@
           digitaloceanCli
         ];
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-      in
-      {
-        packages.default = craneLib.buildPackage (
+        digitaloceanCargoExtraArgs = "--features digitalocean,cloudflare";
+        digitaloceanCargoArtifacts = craneLib.buildDepsOnly (
           commonArgs
           // {
-            inherit cargoArtifacts;
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-            meta.mainProgram = "cloud";
-            postInstall = ''
-              wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath} \
-                --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}' \
-                --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean.com/api-token 2>/dev/null)}'
-            '';
+            cargoExtraArgs = digitaloceanCargoExtraArgs;
           }
         );
+        cloudPackage =
+          packageArguments:
+          craneLib.buildPackage (
+            commonArgs
+            // packageArguments
+            // {
+              nativeBuildInputs = [ pkgs.makeWrapper ];
+              meta.mainProgram = "cloud";
+              postInstall = ''
+                wrapProgram $out/bin/cloud-daemon --prefix PATH : ${cloudRuntimePath} \
+                  --run 'export HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o hetzner/api-token 2>/dev/null)}' \
+                  --run 'export DIGITALOCEAN_ACCESS_TOKEN=''${DIGITALOCEAN_ACCESS_TOKEN:-$(${pkgs.gopass}/bin/gopass show -o digitalocean.com/api-token 2>/dev/null)}'
+              '';
+            }
+          );
+        digitaloceanLiveTest = pkgs.writeShellApplication {
+          name = "cloud-digitalocean-live-test";
+          runtimeInputs = [
+            pkgs.gopass
+            pkgs.openssh
+            toolchain
+          ];
+          text = ''
+            if [ ! -f Cargo.toml ]; then
+              echo "cloud: run this live test app from the cloud repository root" >&2
+              exit 2
+            fi
+            if [ -z "''${DIGITALOCEAN_ACCESS_TOKEN:-}" ]; then
+              DIGITALOCEAN_ACCESS_TOKEN=$(gopass show -o digitalocean.com/api-token)
+              export DIGITALOCEAN_ACCESS_TOKEN
+            fi
+            cargo test --features digitalocean --test digitalocean_live -- --ignored --nocapture
+          '';
+        };
+      in
+      {
+        packages = {
+          default = cloudPackage { inherit cargoArtifacts; };
+          digitalocean = cloudPackage {
+            cargoArtifacts = digitaloceanCargoArtifacts;
+            cargoExtraArgs = digitaloceanCargoExtraArgs;
+            pname = "cloud-digitalocean";
+          };
+        };
 
         checks = {
           build = craneLib.cargoBuild (
@@ -108,6 +144,22 @@
             }
           );
 
+          digitalocean-test = craneLib.cargoTest (
+            commonArgs
+            // {
+              cargoArtifacts = digitaloceanCargoArtifacts;
+              cargoTestExtraArgs = "--features digitalocean,cloudflare --test digitalocean";
+            }
+          );
+
+          digitalocean-live-test-compiles = craneLib.cargoTest (
+            commonArgs
+            // {
+              cargoArtifacts = digitaloceanCargoArtifacts;
+              cargoTestExtraArgs = "--features digitalocean --test digitalocean_live -- --ignored --list";
+            }
+          );
+
           fmt = craneLib.cargoFmt {
             inherit src;
           };
@@ -117,6 +169,14 @@
             // {
               inherit cargoArtifacts;
               cargoClippyExtraArgs = "--all-targets -- -D warnings";
+            }
+          );
+
+          digitalocean-clippy = craneLib.cargoClippy (
+            commonArgs
+            // {
+              cargoArtifacts = digitaloceanCargoArtifacts;
+              cargoClippyExtraArgs = "--features digitalocean,cloudflare --all-targets -- -D warnings";
             }
           );
         };
@@ -129,6 +189,16 @@
         apps.daemon = {
           type = "app";
           program = "${self.packages.${system}.default}/bin/cloud-daemon";
+        };
+
+        apps.daemon-digitalocean = {
+          type = "app";
+          program = "${self.packages.${system}.digitalocean}/bin/cloud-daemon";
+        };
+
+        apps.digitalocean-live-test = {
+          type = "app";
+          program = "${digitaloceanLiveTest}/bin/cloud-digitalocean-live-test";
         };
 
         apps.meta = {

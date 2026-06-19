@@ -117,6 +117,7 @@ pub struct ApiServer {
 /// Tests substitute a canned implementation; production uses `HttpApi`.
 pub trait Api: Send + Sync {
     fn ensure_ssh_key(&self, token: &Token, name: &str, public_key: &str) -> Result<String>;
+    fn delete_ssh_key(&self, token: &Token, fingerprint: &str) -> Result<()>;
     fn create_server(&self, token: &Token, spec: &ServerSpec) -> Result<ApiServer>;
     fn get_server(&self, token: &Token, identifier: &HostIdentifier) -> Result<ApiServer>;
     fn list_servers(&self, token: &Token) -> Result<Vec<ApiServer>>;
@@ -260,6 +261,11 @@ impl Api for HttpApi {
             },
         )?;
         Ok(created.ssh_key.fingerprint)
+    }
+
+    fn delete_ssh_key(&self, token: &Token, fingerprint: &str) -> Result<()> {
+        let path = format!("/v2/account/keys/{fingerprint}");
+        self.delete(token, &path)
     }
 
     /// Resolves each SSH-key name to its fingerprint, then POSTs the droplet.
