@@ -448,8 +448,19 @@ impl DropletPayload {
             image: spec.image.clone(),
             ssh_keys,
             region: spec.location.clone(),
-            ipv6: true,
-            monitoring: true,
+            // DigitalOcean's ipv6 networking, like its monitoring agent, is
+            // only honored on DO's own distribution images — a custom image
+            // (CriomOS CloudNode) is rejected "image is not compatible with
+            // ipv6". A node that wants ipv6 carries it through its own network
+            // config, not DO's create-time flag. (Both flags should become
+            // desired-state fields on ServerSpec rather than hardcoded.)
+            ipv6: false,
+            // DigitalOcean's monitoring agent is only supported on DO's own
+            // distribution images — creating a droplet from a custom image
+            // (e.g. a CriomOS CloudNode image) with monitoring=true is rejected
+            // "Monitoring is not supported for this image." CriomOS nodes carry
+            // their own observability and do not use DO's metrics agent.
+            monitoring: false,
         }
     }
 }
