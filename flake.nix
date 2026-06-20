@@ -118,6 +118,46 @@
             cargo test --features digitalocean --test digitalocean_live -- --ignored --nocapture
           '';
         };
+        # Re-usable CriomOS-on-DigitalOcean deploy harness: provision a droplet
+        # FROM A PRE-MADE IMAGE (CRIOMOS_IMAGE numeric snapshot id => mode 1, or
+        # a stock slug => mode 2), confirm over ssh, ALWAYS destroy. Spends real
+        # money, so it is an explicit opt-in app, never a `nix flake check`.
+        digitaloceanDeployLiveTest = pkgs.writeShellApplication {
+          name = "cloud-digitalocean-deploy-live-test";
+          runtimeInputs = [
+            pkgs.gopass
+            pkgs.openssh
+            pkgs.curl
+            pkgs.jq
+            pkgs.nixos-rebuild
+            toolchain
+          ];
+          text = ''
+            if [ ! -f Cargo.toml ]; then
+              echo "cloud: run this deploy live test from the cloud repository root" >&2
+              exit 2
+            fi
+            if [ -z "''${DIGITALOCEAN_ACCESS_TOKEN:-}" ]; then
+              DIGITALOCEAN_ACCESS_TOKEN=$(gopass show -o digitalocean.com/api-token)
+              export DIGITALOCEAN_ACCESS_TOKEN
+            fi
+            # Secondary safety net: a prefix-named sweep on EXIT, in case the
+            # test process is killed before the Rust Drop guard can destroy the
+            # droplet. Idempotent; a 404 just means it is already gone.
+            sweep() {
+              curl -fsS -H "Authorization: Bearer $DIGITALOCEAN_ACCESS_TOKEN" \
+                "https://api.digitalocean.com/v2/droplets?per_page=200" 2>/dev/null \
+                | jq -r '.droplets[] | select(.name|startswith("criome-deploy-test-")) | .id' \
+                | while read -r id; do
+                    curl -fsS -X DELETE -H "Authorization: Bearer $DIGITALOCEAN_ACCESS_TOKEN" \
+                      "https://api.digitalocean.com/v2/droplets/$id" >/dev/null 2>&1 || true
+                    echo "sweep: deleted leftover droplet $id" >&2
+                  done
+            }
+            trap sweep EXIT
+            cargo test --features digitalocean --test digitalocean_deploy_live -- --ignored --nocapture
+          '';
+        };
       in
       {
         packages = {
@@ -160,6 +200,16 @@
             }
           );
 
+          # Compiles + lists the deploy harness but never executes it, so
+          # `nix flake check` catches bit-rot without spending money.
+          digitalocean-deploy-live-test-compiles = craneLib.cargoTest (
+            commonArgs
+            // {
+              cargoArtifacts = digitaloceanCargoArtifacts;
+              cargoTestExtraArgs = "--features digitalocean --test digitalocean_deploy_live -- --ignored --list";
+            }
+          );
+
           fmt = craneLib.cargoFmt {
             inherit src;
           };
@@ -199,6 +249,11 @@
         apps.digitalocean-live-test = {
           type = "app";
           program = "${digitaloceanLiveTest}/bin/cloud-digitalocean-live-test";
+        };
+
+        apps.digitalocean-deploy-live-test = {
+          type = "app";
+          program = "${digitaloceanDeployLiveTest}/bin/cloud-digitalocean-deploy-live-test";
         };
 
         apps.meta = {
