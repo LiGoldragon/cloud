@@ -27,6 +27,62 @@ exactly one Signal peer: `cloud-daemon`.
 does not decide which Criome domains should exist; it applies provider-facing
 plans from authorized inputs.
 
+## Direction and Principles
+
+`cloud` is the home for provider API machinery — Cloudflare, Google, and
+cloud hosters such as Hetzner. Plan preparation belongs on the owner
+(meta) signal surface (Spirit `mbmy`).
+
+The daemon models a provider as a state it reflects: refresh-by-querying is
+public on `signal-cloud`, and mutations require owner authority on
+`meta-signal-cloud`. This generalises to any component whose state is a
+reflected external resource — Query is public, Mutate is owner-only (Spirit
+`7kyx`).
+
+The mutation operation is `Mutate` with an acknowledged-state reply
+`Mutated`. The daemon distinguishes Mutate-sent (request issued to the
+provider, pending) from Mutated (provider-acknowledged); held state is
+last-known-acknowledgment, not a live provider query (Spirit `8fe9`).
+
+The daemon starts almost-stateless and caches last-known-state of queried
+provider resources in memory. Cache loss is acceptable because the provider
+is the source of truth; the first cache is runtime/volatile, provider-backed
+and possibly lossy, and persistent storage is deferred until state worth
+preserving emerges (Spirit `m3eg`).
+
+The next active capability beyond the shipped Cloudflare read-only DNS path
+is on-demand compute-node provisioning via cloud-hoster provider APIs,
+targeting easiest-to-spin-up providers first. DigitalOcean is the lead
+compute provider over Hetzner: billing by the second or minute means
+create-and-destroy cycles cost actual elapsed usage, so no billing-hour reuse
+pool is needed for it. Hetzner stays supported but not lead; its hourly
+billing keeps a billing-hour-aware reuse pool — an idle recently-created node
+inside its paid window is reused instead of delete-and-recreate and reaped
+before crossing into a new paid hour (keep-warm 59 minutes for Hetzner), the
+larger benefit being latency saved by skipping create, boot, and install
+(Spirit `150a`).
+
+Credential custody moves toward system-level credentials. The current wire-
+supplied `CredentialHandle` the daemon resolves to a process environment
+variable behind the `0o600` owner socket is the accepted transitional shape;
+the eventual direction is system-custodied machine credentials following the
+criome-custodied machine-identity pattern rather than a wire-selected env-var
+name (Spirit `iprx`).
+
+## Packaging
+
+When built with the `cloudflare` feature, `flarectl` is a runtime
+dependency: `cloud` binaries are wrapped via `makeWrapper`/`wrapProgram` so
+`flarectl` is guaranteed on the daemon PATH at runtime rather than relying on
+the user profile (Spirit `16l0`). The cloud flake wraps `flarectl` with a
+gopass-backed shim that fetches the Cloudflare API token from the password
+manager and exports it as `CF_API_TOKEN` before exec, realising the
+env-var-populated-by-password-manager auth pattern end-to-end inside the nix
+closure; the canonical provider token handle is the domain-style credential
+path `cloudflare.com/api-token`. The token value itself never enters source,
+the wrapper text, the nix store, logs, or Signal records — only the handle
+path does (Spirit `nsi2`).
+
 ## Actor Shape
 
 The first daemon should use one actor per concern:
